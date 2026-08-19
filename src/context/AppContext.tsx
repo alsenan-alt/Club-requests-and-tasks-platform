@@ -145,17 +145,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return AVAILABLE_SERVICES;
   });
 
-  // Authentication State
-  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.USER);
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.error(e);
-    }
-    // Default initial user
-    return USER_ACCOUNTS[0];
-  });
+  // Authentication State - Default to null so the Start Page is ALWAYS the secure Login Portal
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
 
   const [requests, setRequests] = useState<ClubRequest[]>(() => {
     try {
