@@ -1,0 +1,6 @@
+{
+  "name": "منصة طلبات الأندية الطلابية",
+  "description": "منصة لرؤساء الأندية لتقديم طلبات الفعاليات وتوجيه المهام تلقائيًا للموظفين المعنيين لمتابعتها ومعالجتها",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

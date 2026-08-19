@@ -1,0 +1,1069 @@
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import confetti from 'canvas-confetti';
+import { 
+  RoleType, 
+  ClubRequest, 
+  Task, 
+  TaskStatus, 
+  NotificationItem, 
+  StaffMember,
+  RequestStatus,
+  UserAccount,
+  ServiceItem,
+  ServiceField
+} from '../types';
+import { 
+  STAFF_MEMBERS, 
+  DEPARTMENTS, 
+  AVAILABLE_SERVICES, 
+  INITIAL_REQUESTS, 
+  INITIAL_NOTIFICATIONS,
+  USER_ACCOUNTS,
+  CLUBS_LIST 
+} from '../data/initialData';
+
+interface AppContextType {
+  currentUser: UserAccount | null;
+  userAccounts: UserAccount[];
+  login: (userId: string) => void;
+  validateAndLogin: (userIdOrUsername: string, passwordInput: string) => { success: boolean; message?: string };
+  changePassword: (oldPassword: string, newPassword: string) => { success: boolean; message: string };
+  logout: () => void;
+  registerNewClubPresident: (formData: {
+    clubName: string;
+    presidentName: string;
+    username: string;
+    password?: string;
+    email: string;
+    phone: string;
+    category?: string;
+    office?: string;
+    bio?: string;
+  }) => UserAccount;
+  deleteClubAccount: (clubUserId: string) => { success: boolean; message: string };
+  updateUserProfile: (updatedFields: Partial<UserAccount>, targetUserId?: string) => void;
+  currentRole: RoleType;
+  currentStaff: StaffMember | undefined;
+  activeClubName: string;
+  clubsList: string[];
+  requests: ClubRequest[];
+  visibleRequests: ClubRequest[];
+  notifications: NotificationItem[];
+  unreadNotificationCount: number;
+  markNotificationAsRead: (id: string) => void;
+  markAllNotificationsAsRead: () => void;
+  createNewRequest: (formData: {
+    clubName?: string;
+    presidentName?: string;
+    presidentPhone?: string;
+    presidentEmail?: string;
+    eventTitle: string;
+    eventType: any;
+    eventDate: string;
+    startTime: string;
+    endTime: string;
+    locationSummary: string;
+    expectedAttendees: number;
+    description: string;
+    budget?: string;
+    servicesData: Record<string, { serviceId: string; priority: 'normal' | 'high' | 'urgent'; details: Record<string, any> }>;
+  }) => ClubRequest;
+  createSingleServiceRequest: (
+    serviceId: string, 
+    details: Record<string, any>, 
+    clubName?: string, 
+    presidentName?: string, 
+    eventTitle?: string, 
+    eventDate?: string, 
+    priority?: 'normal' | 'high' | 'urgent'
+  ) => ClubRequest;
+  updateTaskStatus: (taskId: string, newStatus: TaskStatus, notes?: string, commentText?: string) => void;
+  addTaskComment: (taskId: string, message: string) => void;
+  addTaskDetail: (taskId: string, label: string, value: any) => void;
+  deleteTaskDetail: (taskId: string, keyOrLabel: string) => void;
+  updateTaskDetail: (taskId: string, keyOrLabel: string, value: any) => void;
+  addGuestToTask: (taskId: string, guest: any) => void;
+  removeGuestFromTask: (taskId: string, guestId: string) => void;
+  deleteRequest: (requestId: string) => void;
+  services: ServiceItem[];
+  addServiceField: (serviceId: string, newField: ServiceField) => { success: boolean; message: string };
+  updateServiceField: (serviceId: string, fieldId: string, updatedField: Partial<ServiceField>) => { success: boolean; message: string };
+  deleteServiceField: (serviceId: string, fieldId: string) => { success: boolean; message: string };
+  resetServiceToDefault: (serviceId?: string) => void;
+  addNewCustomService: (serviceData: { name: string; departmentId: any; description: string; iconName?: string; fields?: ServiceField[] }) => ServiceItem;
+  selectedRequestId: string | null;
+  setSelectedRequestId: (id: string | null) => void;
+  isNewRequestModalOpen: boolean;
+  setIsNewRequestModalOpen: (open: boolean) => void;
+  isQuickServiceModalOpen: boolean;
+  setIsQuickServiceModalOpen: (open: boolean) => void;
+  activeQuickServiceId: string | null;
+  setActiveQuickServiceId: (id: string | null) => void;
+  isUserProfileModalOpen: boolean;
+  setIsUserProfileModalOpen: (open: boolean) => void;
+  resetToSampleData: () => void;
+}
+
+const AppContext = createContext<AppContextType | undefined>(undefined);
+
+const STORAGE_KEYS = {
+  USER: 'club_auth_user_v2',
+  ACCOUNTS: 'club_accounts_list_v2',
+  REQUESTS: 'club_requests_app_v2',
+  NOTIFICATIONS: 'club_notifications_app_v2',
+  SERVICES: 'club_services_config_v2',
+};
+
+export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Accounts State (including custom registered clubs)
+  const [userAccounts, setUserAccounts] = useState<UserAccount[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error(e);
+    }
+    return USER_ACCOUNTS;
+  });
+
+  // Services Catalog & Fields Configuration State
+  const [services, setServices] = useState<ServiceItem[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.SERVICES);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error(e);
+    }
+    return AVAILABLE_SERVICES;
+  });
+
+  // Authentication State
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.USER);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error(e);
+    }
+    // Default initial user
+    return USER_ACCOUNTS[0];
+  });
+
+  const [requests, setRequests] = useState<ClubRequest[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.REQUESTS);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error(e);
+    }
+    return INITIAL_REQUESTS;
+  });
+
+  const [notifications, setNotifications] = useState<NotificationItem[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error(e);
+    }
+    return INITIAL_NOTIFICATIONS;
+  });
+
+  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
+  const [isNewRequestModalOpen, setIsNewRequestModalOpen] = useState(false);
+  const [isQuickServiceModalOpen, setIsQuickServiceModalOpen] = useState(false);
+  const [activeQuickServiceId, setActiveQuickServiceId] = useState<string | null>(null);
+  const [isUserProfileModalOpen, setIsUserProfileModalOpen] = useState(false);
+
+  // Sync to localStorage
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(userAccounts));
+  }, [userAccounts]);
+
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.USER);
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(requests));
+  }, [requests]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(notifications));
+  }, [notifications]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(services));
+  }, [services]);
+
+  const login = (userId: string) => {
+    const found = userAccounts.find(u => u.id === userId);
+    if (found) {
+      setCurrentUser(found);
+      setSelectedRequestId(null);
+    }
+  };
+
+  const validateAndLogin = (userIdOrUsername: string, passwordInput: string): { success: boolean; message?: string } => {
+    const trimmedInput = (passwordInput || '').trim();
+    const found = userAccounts.find(u => u.id === userIdOrUsername || u.username === userIdOrUsername || u.role === userIdOrUsername);
+    
+    if (!found) {
+      return { success: false, message: 'لم يتم العثور على الحساب المحدد' };
+    }
+
+    const expectedPassword = (found.password || '123').trim();
+    if (trimmedInput !== expectedPassword) {
+      return { success: false, message: 'كلمة المرور غير صحيحة، يرجى المحاولة مرة أخرى' };
+    }
+
+    setCurrentUser(found);
+    setSelectedRequestId(null);
+    return { success: true };
+  };
+
+  const changePassword = (oldPassword: string, newPassword: string): { success: boolean; message: string } => {
+    if (!currentUser) {
+      return { success: false, message: 'لا يوجد مستخدم مسجل حالياً' };
+    }
+
+    const currentActualPassword = (currentUser.password || '123').trim();
+    if (oldPassword.trim() !== currentActualPassword) {
+      return { success: false, message: 'كلمة المرور الحالية غير صحيحة' };
+    }
+
+    if (!newPassword || newPassword.trim().length < 3) {
+      return { success: false, message: 'يجب أن تتكون كلمة المرور الجديدة من 3 خانات على الأقل' };
+    }
+
+    const updatedAccount: UserAccount = {
+      ...currentUser,
+      password: newPassword.trim(),
+    };
+
+    setCurrentUser(updatedAccount);
+    setUserAccounts(prev => prev.map(acc => acc.id === currentUser.id ? updatedAccount : acc));
+
+    return { success: true, message: 'تم تحديث كلمة المرور وتعيينها بنجاح!' };
+  };
+
+  const logout = () => {
+    setCurrentUser(null);
+    setSelectedRequestId(null);
+    localStorage.removeItem(STORAGE_KEYS.USER);
+  };
+
+  // Register New Club President & Club Account
+  const registerNewClubPresident = (formData: {
+    clubName: string;
+    presidentName: string;
+    username: string;
+    password?: string;
+    email: string;
+    phone: string;
+    category?: string;
+    office?: string;
+    bio?: string;
+  }): UserAccount => {
+    const cleanClubName = formData.clubName.startsWith('نادي ') ? formData.clubName : `نادي ${formData.clubName}`;
+    const newUserId = `user_club_${Date.now()}`;
+    const colorGradients = [
+      'from-emerald-600 to-teal-700',
+      'from-blue-600 to-cyan-700',
+      'from-purple-600 to-indigo-700',
+      'from-amber-600 to-orange-700',
+      'from-rose-600 to-pink-700',
+      'from-teal-600 to-emerald-800'
+    ];
+    const randomBg = colorGradients[Math.floor(Math.random() * colorGradients.length)];
+
+    const newAccount: UserAccount = {
+      id: newUserId,
+      username: formData.username.trim() || `club_${Date.now().toString().slice(-4)}`,
+      password: (formData.password || '123').trim(),
+      name: formData.presidentName.trim(),
+      role: 'club_president',
+      clubName: cleanClubName,
+      title: `رئيس ${cleanClubName}`,
+      email: formData.email.trim(),
+      phone: formData.phone.trim(),
+      office: formData.office?.trim() || 'المجمع الطلابي - مقر الأندية',
+      avatarBg: randomBg,
+      bio: formData.bio?.trim() || `النادي الطلابي المعتمد: ${cleanClubName}`,
+      category: formData.category || 'عام',
+      membersCount: 25,
+      isCustom: true,
+    };
+
+    setUserAccounts(prev => [newAccount, ...prev]);
+    setCurrentUser(newAccount);
+    setSelectedRequestId(null);
+
+    // Welcome Notification
+    const timestamp = new Date().toISOString();
+    setNotifications(prev => [
+      {
+        id: `notif-${Date.now()}`,
+        title: `مرحباً بك في منظومة الأندية!`,
+        message: `تم تفعيل حساب ${cleanClubName} برئاسة ${formData.presidentName} بنجاح. يمكنك الآن تقديم الطلبات ومتابعة التوجيه.`,
+        targetRole: 'club_president',
+        timestamp,
+        read: false,
+        type: 'alert',
+      },
+      {
+        id: `notif-admin-${Date.now()}`,
+        title: `تسجيل نادٍ جديد: ${cleanClubName}`,
+        message: `قام ${formData.presidentName} بتسجيل وتفعيل حساب ${cleanClubName}.`,
+        targetRole: 'admin',
+        timestamp,
+        read: false,
+        type: 'alert',
+      },
+      ...prev,
+    ]);
+
+    try {
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b']
+      });
+    } catch (e) {
+      // ignore
+    }
+
+    return newAccount;
+  };
+
+  // Delete Club Account (Admin capability)
+  const deleteClubAccount = (clubUserId: string): { success: boolean; message: string } => {
+    const target = userAccounts.find(u => u.id === clubUserId);
+    if (!target) {
+      return { success: false, message: 'لم يتم العثور على حساب النادي المحدد' };
+    }
+    if (target.role !== 'club_president') {
+      return { success: false, message: 'لا يمكن حذف هذا الحساب لأنه ليس نادياً طلابياً' };
+    }
+
+    const clubNameToDelete = target.clubName || target.name;
+    setUserAccounts(prev => prev.filter(u => u.id !== clubUserId));
+
+    // If current logged-in user is this deleted club, auto-switch to admin or default
+    if (currentUser?.id === clubUserId) {
+      const fallbackUser = userAccounts.find(u => u.role === 'admin') || userAccounts[0];
+      setCurrentUser(fallbackUser);
+    }
+
+    // Add admin notification
+    const timestamp = new Date().toISOString();
+    setNotifications(prev => [
+      {
+        id: `notif-del-${Date.now()}`,
+        title: `حذف نادي: ${clubNameToDelete}`,
+        message: `تم حذف حساب ${clubNameToDelete} نهائياً من سجل الأندية الطلابية.`,
+        targetRole: 'admin',
+        timestamp,
+        read: false,
+        type: 'alert',
+      },
+      ...prev,
+    ]);
+
+    return { success: true, message: `تم حذف حساب (${clubNameToDelete}) من المنظومة بنجاح` };
+  };
+
+  // Update user profile
+  const updateUserProfile = (updatedFields: Partial<UserAccount>, targetUserId?: string) => {
+    const userIdToUpdate = targetUserId || currentUser?.id;
+    if (!userIdToUpdate) return;
+
+    setUserAccounts(prev => prev.map(acc => {
+      if (acc.id === userIdToUpdate) {
+        const updated = { ...acc, ...updatedFields };
+        if (currentUser?.id === userIdToUpdate) {
+          setCurrentUser(updated);
+        }
+        return updated;
+      }
+      return acc;
+    }));
+
+    // If club name changed, also update related requests club name
+    if (updatedFields.clubName && currentUser?.clubName) {
+      setRequests(prev => prev.map(r => {
+        if (r.clubName === currentUser.clubName) {
+          return {
+            ...r,
+            clubName: updatedFields.clubName!,
+            presidentName: updatedFields.name || r.presidentName,
+            presidentPhone: updatedFields.phone || r.presidentPhone,
+            presidentEmail: updatedFields.email || r.presidentEmail,
+          };
+        }
+        return r;
+      }));
+    }
+  };
+
+  const currentRole: RoleType = currentUser?.role || 'club_president';
+  const activeClubName = currentUser?.clubName || CLUBS_LIST[0];
+
+  // Dynamic clubs list
+  const clubsList = Array.from(new Set([
+    ...userAccounts.filter(u => u.role === 'club_president' && u.clubName).map(u => u.clubName!),
+    ...CLUBS_LIST
+  ]));
+
+  const currentStaff = currentUser?.staffId 
+    ? STAFF_MEMBERS.find(s => s.id === currentUser.staffId)
+    : STAFF_MEMBERS.find(s => s.roleCode === currentRole);
+
+  // ==========================================
+  // Strict Privacy Filter for Requests & Tasks
+  // ==========================================
+  const visibleRequests: ClubRequest[] = requests.filter(req => {
+    if (!currentUser) return false;
+    // 1. Admin sees everything for supervision
+    if (currentUser.role === 'admin') return true;
+
+    // 2. Club President ONLY sees their own club's requests
+    if (currentUser.role === 'club_president') {
+      return req.clubName === currentUser.clubName;
+    }
+
+    // 3. Staff Member ONLY sees requests that contain tasks assigned to them
+    if (currentStaff) {
+      return req.tasks.some(t => t.staffId === currentStaff.id);
+    }
+
+    return false;
+  }).map(req => {
+    // If user is a staff member, privacy protection hides other staff's private details
+    if (currentStaff && currentUser?.role !== 'admin') {
+      return {
+        ...req,
+        // Only include tasks belonging to this staff member
+        tasks: req.tasks.filter(t => t.staffId === currentStaff.id),
+      };
+    }
+    return req;
+  });
+
+  const unreadNotificationCount = notifications.filter(n => {
+    if (n.read) return false;
+    if (!currentUser) return false;
+    if (currentUser.role === 'admin') return true;
+    if (n.targetRole === 'all') return true;
+    return n.targetRole === currentUser.role;
+  }).length;
+
+  const markNotificationAsRead = (id: string) => {
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  };
+
+  const markAllNotificationsAsRead = () => {
+    if (!currentUser) return;
+    setNotifications(prev => prev.map(n => {
+      if (n.targetRole === currentUser.role || currentUser.role === 'admin' || n.targetRole === 'all') {
+        return { ...n, read: true };
+      }
+      return n;
+    }));
+  };
+
+  // Re-calculate overall request status
+  const calculateRequestStatus = (tasks: Task[]): RequestStatus => {
+    if (tasks.length === 0) return 'submitted';
+    const allCompleted = tasks.every(t => t.status === 'completed');
+    if (allCompleted) return 'completed';
+    const anyRejected = tasks.every(t => t.status === 'rejected');
+    if (anyRejected) return 'rejected';
+    const anyActive = tasks.some(t => t.status === 'in_progress' || t.status === 'completed');
+    if (anyActive) return 'in_progress';
+    return 'submitted';
+  };
+
+  // Automated routing & request creation with privacy isolation
+  const createNewRequest = (formData: {
+    clubName?: string;
+    presidentName?: string;
+    presidentPhone?: string;
+    presidentEmail?: string;
+    eventTitle: string;
+    eventType: any;
+    eventDate: string;
+    startTime: string;
+    endTime: string;
+    locationSummary: string;
+    expectedAttendees: number;
+    description: string;
+    budget?: string;
+    servicesData: Record<string, { serviceId: string; priority: 'normal' | 'high' | 'urgent'; details: Record<string, any> }>;
+  }): ClubRequest => {
+    const timestamp = new Date().toISOString();
+    const count = requests.length + 1;
+    const reqNum = `طلب #${1040 + count}`;
+    const reqId = `REQ-${new Date().getFullYear()}-${String(count).padStart(3, '0')}`;
+
+    // Enforce club identity from authenticated session
+    const resolvedClubName = (currentUser?.role === 'club_president' && currentUser.clubName)
+      ? currentUser.clubName
+      : (formData.clubName || activeClubName);
+
+    const resolvedPresidentName = (currentUser?.role === 'club_president' && currentUser.name)
+      ? currentUser.name
+      : (formData.presidentName || 'رئيس النادي الطلابي');
+
+    const resolvedPresidentEmail = (currentUser?.role === 'club_president' && currentUser.email)
+      ? currentUser.email
+      : (formData.presidentEmail || 'club@student.kfupm.edu.sa');
+
+    const resolvedPresidentPhone = (currentUser?.role === 'club_president' && currentUser.phone)
+      ? currentUser.phone
+      : (formData.presidentPhone || '0550000000');
+
+    // Auto-generate routed tasks
+    const tasks: Task[] = Object.entries(formData.servicesData).map(([srvKey, srvData], index) => {
+      const srvDef = AVAILABLE_SERVICES.find(s => s.id === srvData.serviceId);
+      const deptDef = srvDef ? DEPARTMENTS[srvDef.departmentId] : undefined;
+      const staff = STAFF_MEMBERS.find(sm => sm.id === srvDef?.staffId);
+
+      return {
+        id: `TSK-${100 * count + index + 1}`,
+        requestId: reqId,
+        serviceId: srvData.serviceId,
+        serviceName: srvDef?.name || 'خدمة محددة',
+        departmentId: srvDef?.departmentId || 'events_buildings',
+        departmentName: deptDef?.name || 'القسم المعني',
+        staffId: srvDef?.staffId || 'hussein_ramadan',
+        staffName: staff?.shortName || 'الموظف المعني',
+        status: 'pending' as TaskStatus,
+        priority: srvData.priority || 'normal',
+        details: srvData.details,
+        comments: [],
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
+    });
+
+    const newRequest: ClubRequest = {
+      id: reqId,
+      requestNumber: reqNum,
+      clubName: resolvedClubName,
+      presidentName: resolvedPresidentName,
+      presidentPhone: resolvedPresidentPhone,
+      presidentEmail: resolvedPresidentEmail,
+      eventTitle: formData.eventTitle,
+      eventType: formData.eventType,
+      eventDate: formData.eventDate,
+      startTime: formData.startTime,
+      endTime: formData.endTime,
+      locationSummary: formData.locationSummary,
+      expectedAttendees: Number(formData.expectedAttendees) || 50,
+      description: formData.description,
+      budget: formData.budget,
+      status: 'submitted',
+      tasks,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+
+    // Create notifications for each assigned staff member
+    const newNotifs: NotificationItem[] = [];
+    const staffIdsTargeted = Array.from(new Set(tasks.map(t => t.staffId)));
+
+    staffIdsTargeted.forEach(staffId => {
+      const staff = STAFF_MEMBERS.find(s => s.id === staffId);
+      if (staff) {
+        const staffTasks = tasks.filter(t => t.staffId === staffId);
+        newNotifs.push({
+          id: `notif-${Date.now()}-${staffId}`,
+          title: `مهام جديدة من ${resolvedClubName}`,
+          message: `تم توجيه ${staffTasks.length} مهمة بخصوص (${formData.eventTitle}) إلى إدارتك.`,
+          targetRole: staff.roleCode,
+          requestId: reqId,
+          timestamp,
+          read: false,
+          type: 'new_request',
+        });
+      }
+    });
+
+    setRequests(prev => [newRequest, ...prev]);
+    setNotifications(prev => [...newNotifs, ...prev]);
+
+    // Celebration confetti
+    try {
+      confetti({
+        particleCount: 80,
+        spread: 60,
+        origin: { y: 0.6 },
+        colors: ['#059669', '#2563eb', '#f59e0b', '#7c3aed']
+      });
+    } catch (e) {
+      // ignore
+    }
+
+    return newRequest;
+  };
+
+  const createSingleServiceRequest = (
+    serviceId: string, 
+    details: Record<string, any>, 
+    clubName?: string, 
+    presidentName?: string, 
+    eventTitle?: string, 
+    eventDate?: string, 
+    priority: 'normal' | 'high' | 'urgent' = 'normal'
+  ): ClubRequest => {
+    const srv = AVAILABLE_SERVICES.find(s => s.id === serviceId);
+    const resolvedClub = (currentUser?.role === 'club_president' && currentUser.clubName)
+      ? currentUser.clubName
+      : (clubName || activeClubName);
+
+    return createNewRequest({
+      clubName: resolvedClub,
+      presidentName: currentUser?.name || presidentName || 'رئيس النادي',
+      presidentPhone: currentUser?.phone || '0550000000',
+      presidentEmail: currentUser?.email || 'club@student.kfupm.edu.sa',
+      eventTitle: eventTitle || `طلب خدمة ${srv?.name || 'سريعة'} - ${resolvedClub}`,
+      eventType: 'other',
+      eventDate: eventDate || new Date().toISOString().split('T')[0],
+      startTime: '16:00',
+      endTime: '20:00',
+      locationSummary: 'المقر المحدد في الطلب',
+      expectedAttendees: 50,
+      description: `طلب خدمة فردية مباشرة وموجهة من قبل رئيس النادي.`,
+      servicesData: {
+        [serviceId]: {
+          serviceId,
+          priority,
+          details,
+        },
+      },
+    });
+  };
+
+  const updateTaskStatus = (
+    taskId: string, 
+    newStatus: TaskStatus, 
+    notes?: string, 
+    commentText?: string
+  ) => {
+    const timestamp = new Date().toISOString();
+
+    setRequests(prev => {
+      return prev.map(req => {
+        const hasTask = req.tasks.some(t => t.id === taskId);
+        if (!hasTask) return req;
+
+        const updatedTasks = req.tasks.map(t => {
+          if (t.id !== taskId) return t;
+
+          const updatedComments = [...t.comments];
+          if (commentText && commentText.trim()) {
+            updatedComments.push({
+              id: `comm-${Date.now()}`,
+              authorName: currentStaff?.shortName || (currentRole === 'admin' ? 'إدارة النشاط' : currentUser?.name || 'رئيس النادي'),
+              authorRole: currentRole,
+              message: commentText.trim(),
+              timestamp,
+            });
+          }
+
+          return {
+            ...t,
+            status: newStatus,
+            notes: notes !== undefined ? notes : t.notes,
+            completionDate: newStatus === 'completed' ? timestamp : t.completionDate,
+            comments: updatedComments,
+            updatedAt: timestamp,
+          };
+        });
+
+        const newReqStatus = calculateRequestStatus(updatedTasks);
+
+        return {
+          ...req,
+          status: newReqStatus,
+          tasks: updatedTasks,
+          updatedAt: timestamp,
+        };
+      });
+    });
+
+    // Notify club president of task update
+    const currentReq = requests.find(r => r.tasks.some(t => t.id === taskId));
+    const targetTask = currentReq?.tasks.find(t => t.id === taskId);
+
+    if (currentReq && targetTask) {
+      const statusLabels: Record<TaskStatus, string> = {
+        pending: 'قيد الانتظار',
+        in_progress: 'جارٍ التنفيذ',
+        completed: 'تم الإنجاز بنجاح',
+        rejected: 'تم الاعتذار عن الطلب',
+        needs_info: 'يتطلب معلومات إضافية',
+      };
+
+      setNotifications(prev => [
+        {
+          id: `notif-${Date.now()}`,
+          title: `تحديث في مهمة: ${targetTask.serviceName}`,
+          message: `قام ${currentStaff?.shortName || 'الموظف المسؤول'} بتغيير حالة المهمة إلى (${statusLabels[newStatus]}).`,
+          targetRole: 'club_president',
+          requestId: currentReq.id,
+          taskId: targetTask.id,
+          timestamp,
+          read: false,
+          type: 'status_change',
+        },
+        ...prev,
+      ]);
+    }
+  };
+
+  const addTaskComment = (taskId: string, message: string) => {
+    if (!message.trim()) return;
+    const timestamp = new Date().toISOString();
+
+    setRequests(prev => {
+      return prev.map(req => {
+        if (!req.tasks.some(t => t.id === taskId)) return req;
+
+        const updatedTasks = req.tasks.map(t => {
+          if (t.id !== taskId) return t;
+
+          const newComment = {
+            id: `comm-${Date.now()}`,
+            authorName: currentStaff?.shortName || (currentRole === 'admin' ? 'إشراف إدارة النشاط' : currentUser?.name || 'رئيس النادي'),
+            authorRole: currentRole,
+            message: message.trim(),
+            timestamp,
+          };
+
+          return {
+            ...t,
+            comments: [...t.comments, newComment],
+            updatedAt: timestamp,
+          };
+        });
+
+        return {
+          ...req,
+          tasks: updatedTasks,
+          updatedAt: timestamp,
+        };
+      });
+    });
+  };
+
+  // Staff & Admin: Add/Update a service detail
+  const addTaskDetail = (taskId: string, label: string, value: any) => {
+    if (!label || !label.trim()) return;
+    const timestamp = new Date().toISOString();
+
+    setRequests(prev => {
+      return prev.map(req => {
+        if (!req.tasks.some(t => t.id === taskId)) return req;
+
+        const updatedTasks = req.tasks.map(t => {
+          if (t.id !== taskId) return t;
+
+          const currentDetails = { ...(t.details || {}) };
+          currentDetails[label.trim()] = value;
+
+          // Add automated log comment
+          const logComment = {
+            id: `comm-detail-${Date.now()}`,
+            authorName: currentStaff?.shortName || (currentRole === 'admin' ? 'إدارة النشاط' : currentUser?.name || 'المستخدم'),
+            authorRole: currentRole,
+            message: `قام بتحديث/إضافة تفصيل: (${label.trim()}: ${typeof value === 'object' ? 'بيانات متقدمة' : value})`,
+            timestamp,
+          };
+
+          return {
+            ...t,
+            details: currentDetails,
+            comments: [...(t.comments || []), logComment],
+            updatedAt: timestamp,
+          };
+        });
+
+        return {
+          ...req,
+          tasks: updatedTasks,
+          updatedAt: timestamp,
+        };
+      });
+    });
+  };
+
+  // Staff & Admin: Delete a service detail
+  const deleteTaskDetail = (taskId: string, keyOrLabel: string) => {
+    if (!keyOrLabel) return;
+    const timestamp = new Date().toISOString();
+
+    setRequests(prev => {
+      return prev.map(req => {
+        if (!req.tasks.some(t => t.id === taskId)) return req;
+
+        const updatedTasks = req.tasks.map(t => {
+          if (t.id !== taskId) return t;
+
+          const currentDetails = { ...(t.details || {}) };
+          delete currentDetails[keyOrLabel];
+
+          const logComment = {
+            id: `comm-del-detail-${Date.now()}`,
+            authorName: currentStaff?.shortName || (currentRole === 'admin' ? 'إدارة النشاط' : currentUser?.name || 'المستخدم'),
+            authorRole: currentRole,
+            message: `قام بحذف تفصيل: (${keyOrLabel})`,
+            timestamp,
+          };
+
+          return {
+            ...t,
+            details: currentDetails,
+            comments: [...(t.comments || []), logComment],
+            updatedAt: timestamp,
+          };
+        });
+
+        return {
+          ...req,
+          tasks: updatedTasks,
+          updatedAt: timestamp,
+        };
+      });
+    });
+  };
+
+  // Staff & Admin: Generic task detail update
+  const updateTaskDetail = (taskId: string, keyOrLabel: string, value: any) => {
+    addTaskDetail(taskId, keyOrLabel, value);
+  };
+
+  // Dynamic Security Guest Management
+  const addGuestToTask = (taskId: string, guest: any) => {
+    const timestamp = new Date().toISOString();
+
+    setRequests(prev => {
+      return prev.map(req => {
+        if (!req.tasks.some(t => t.id === taskId)) return req;
+
+        const updatedTasks = req.tasks.map(t => {
+          if (t.id !== taskId) return t;
+
+          const currentDetails = { ...(t.details || {}) };
+          const currentList = Array.isArray(currentDetails.guestsList) ? [...currentDetails.guestsList] : [];
+          currentList.push(guest);
+          currentDetails.guestsList = currentList;
+          currentDetails.visitor_count = currentList.length;
+
+          return {
+            ...t,
+            details: currentDetails,
+            updatedAt: timestamp,
+          };
+        });
+
+        return {
+          ...req,
+          tasks: updatedTasks,
+          updatedAt: timestamp,
+        };
+      });
+    });
+  };
+
+  const removeGuestFromTask = (taskId: string, guestId: string) => {
+    const timestamp = new Date().toISOString();
+
+    setRequests(prev => {
+      return prev.map(req => {
+        if (!req.tasks.some(t => t.id === taskId)) return req;
+
+        const updatedTasks = req.tasks.map(t => {
+          if (t.id !== taskId) return t;
+
+          const currentDetails = { ...(t.details || {}) };
+          const currentList = Array.isArray(currentDetails.guestsList) 
+            ? currentDetails.guestsList.filter((g: any) => g.id !== guestId)
+            : [];
+          currentDetails.guestsList = currentList;
+          currentDetails.visitor_count = currentList.length;
+
+          return {
+            ...t,
+            details: currentDetails,
+            updatedAt: timestamp,
+          };
+        });
+
+        return {
+          ...req,
+          tasks: updatedTasks,
+          updatedAt: timestamp,
+        };
+      });
+    });
+  };
+
+  const deleteRequest = (requestId: string) => {
+    setRequests(prev => prev.filter(r => r.id !== requestId));
+    if (selectedRequestId === requestId) {
+      setSelectedRequestId(null);
+    }
+  };
+
+  // Staff Service Fields Configuration Methods
+  const addServiceField = (serviceId: string, newField: any): { success: boolean; message: string } => {
+    let serviceName = '';
+    setServices(prev => prev.map(s => {
+      if (s.id === serviceId) {
+        serviceName = s.name;
+        const fieldId = newField.id || `field_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+        return {
+          ...s,
+          fields: [...s.fields.filter(f => f.id !== fieldId), { ...newField, id: fieldId }]
+        };
+      }
+      return s;
+    }));
+    return { success: true, message: `تمت إضافة تفصيل/حقل (${newField.label}) إلى خدمة (${serviceName}) بنجاح!` };
+  };
+
+  const updateServiceField = (serviceId: string, fieldId: string, updatedField: any): { success: boolean; message: string } => {
+    let serviceName = '';
+    setServices(prev => prev.map(s => {
+      if (s.id === serviceId) {
+        serviceName = s.name;
+        return {
+          ...s,
+          fields: s.fields.map(f => f.id === fieldId ? { ...f, ...updatedField } : f)
+        };
+      }
+      return s;
+    }));
+    return { success: true, message: `تم تحديث بيانات التفصيل في خدمة (${serviceName}) بنجاح!` };
+  };
+
+  const deleteServiceField = (serviceId: string, fieldId: string): { success: boolean; message: string } => {
+    let serviceName = '';
+    setServices(prev => prev.map(s => {
+      if (s.id === serviceId) {
+        serviceName = s.name;
+        return {
+          ...s,
+          fields: s.fields.filter(f => f.id !== fieldId)
+        };
+      }
+      return s;
+    }));
+    return { success: true, message: `تم حذف التفصيل من خدمة (${serviceName}) بنجاح!` };
+  };
+
+  const resetServiceToDefault = (serviceId?: string) => {
+    if (serviceId) {
+      const defaultSrv = AVAILABLE_SERVICES.find(s => s.id === serviceId);
+      if (defaultSrv) {
+        setServices(prev => prev.map(s => s.id === serviceId ? JSON.parse(JSON.stringify(defaultSrv)) : s));
+      }
+    } else {
+      setServices(AVAILABLE_SERVICES);
+    }
+  };
+
+  const addNewCustomService = (serviceData: { name: string; departmentId: any; description: string; iconName?: string; fields?: any[] }) => {
+    const newService: ServiceItem = {
+      id: `srv_custom_${Date.now()}`,
+      name: serviceData.name,
+      departmentId: serviceData.departmentId,
+      staffId: DEPARTMENTS[serviceData.departmentId]?.staffId || 'hussein_ramadan',
+      iconName: serviceData.iconName || 'Sparkles',
+      description: serviceData.description,
+      fields: serviceData.fields || [
+        { id: 'custom_notes', label: 'مواصفات وتفاصيل الطلب', type: 'textarea', placeholder: 'اكتب ما تحتاجه بدقة...', required: true }
+      ],
+    };
+
+    setServices(prev => [...prev, newService]);
+    return newService;
+  };
+
+  const resetToSampleData = () => {
+    localStorage.removeItem(STORAGE_KEYS.REQUESTS);
+    localStorage.removeItem(STORAGE_KEYS.NOTIFICATIONS);
+    localStorage.removeItem(STORAGE_KEYS.SERVICES);
+    setRequests(INITIAL_REQUESTS);
+    setNotifications(INITIAL_NOTIFICATIONS);
+    setServices(AVAILABLE_SERVICES);
+  };
+
+  return (
+    <AppContext.Provider
+      value={{
+        currentUser,
+        userAccounts,
+        login,
+        validateAndLogin,
+        changePassword,
+        logout,
+        registerNewClubPresident,
+        deleteClubAccount,
+        updateUserProfile,
+        currentRole,
+        currentStaff,
+        activeClubName,
+        clubsList,
+        requests,
+        visibleRequests,
+        notifications,
+        unreadNotificationCount,
+        markNotificationAsRead,
+        markAllNotificationsAsRead,
+        createNewRequest,
+        createSingleServiceRequest,
+        updateTaskStatus,
+        addTaskComment,
+        addTaskDetail,
+        deleteTaskDetail,
+        updateTaskDetail,
+        addGuestToTask,
+        removeGuestFromTask,
+        deleteRequest,
+        services,
+        addServiceField,
+        updateServiceField,
+        deleteServiceField,
+        resetServiceToDefault,
+        addNewCustomService,
+        selectedRequestId,
+        setSelectedRequestId,
+        isNewRequestModalOpen,
+        setIsNewRequestModalOpen,
+        isQuickServiceModalOpen,
+        setIsQuickServiceModalOpen,
+        activeQuickServiceId,
+        setActiveQuickServiceId,
+        isUserProfileModalOpen,
+        setIsUserProfileModalOpen,
+        resetToSampleData,
+      }}
+    >
+      {children}
+    </AppContext.Provider>
+  );
+};
+
+export const useApp = () => {
+  const context = useContext(AppContext);
+  if (!context) throw new Error('useApp must be used within AppProvider');
+  return context;
+};
