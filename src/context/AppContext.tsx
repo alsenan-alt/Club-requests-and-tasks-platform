@@ -21,6 +21,7 @@ import {
   USER_ACCOUNTS,
   CLUBS_LIST 
 } from '../data/initialData';
+import { fetchGistDatabase, pushGistDatabase, GistDatabasePayload } from '../services/gistSyncService';
 
 interface AppContextType {
   currentUser: UserAccount | null;
@@ -101,6 +102,13 @@ interface AppContextType {
   setActiveQuickServiceId: (id: string | null) => void;
   isUserProfileModalOpen: boolean;
   setIsUserProfileModalOpen: (open: boolean) => void;
+  isSyncModalOpen: boolean;
+  setIsSyncModalOpen: (open: boolean) => void;
+  cloudSyncStatus: 'idle' | 'syncing' | 'synced' | 'error';
+  lastSyncTime: string | null;
+  syncError: string | null;
+  triggerManualSync: () => Promise<void>;
+  triggerManualPush: () => Promise<void>;
   resetToSampleData: () => void;
 }
 
@@ -174,6 +182,125 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isQuickServiceModalOpen, setIsQuickServiceModalOpen] = useState(false);
   const [activeQuickServiceId, setActiveQuickServiceId] = useState<string | null>(null);
   const [isUserProfileModalOpen, setIsUserProfileModalOpen] = useState(false);
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+
+  // Cloud Gist Sync State
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [isInitialHydrated, setIsInitialHydrated] = useState(false);
+
+  // Function to pull latest data from Gist
+  const pullFromCloudGist = async (isBackground = false) => {
+    if (!isBackground) setCloudSyncStatus('syncing');
+    setSyncError(null);
+    try {
+      const result = await fetchGistDatabase();
+      if (result.success && result.data) {
+        const cloudData = result.data;
+        if (Array.isArray(cloudData.requests) && cloudData.requests.length > 0) {
+          setRequests(cloudData.requests);
+        }
+        if (Array.isArray(cloudData.userAccounts) && cloudData.userAccounts.length > 0) {
+          setUserAccounts(cloudData.userAccounts);
+        }
+        if (Array.isArray(cloudData.services) && cloudData.services.length > 0) {
+          setServices(cloudData.services);
+        }
+        if (Array.isArray(cloudData.notifications) && cloudData.notifications.length > 0) {
+          setNotifications(cloudData.notifications);
+        }
+        const nowFormatted = new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        setLastSyncTime(nowFormatted);
+        setCloudSyncStatus('synced');
+      } else if (result.error) {
+        setSyncError(result.error);
+        setCloudSyncStatus('error');
+      }
+    } catch (e: any) {
+      console.error('Error in pullFromCloudGist:', e);
+      setSyncError(e.message || 'فشل الاتصال بـ GitHub Gist');
+      setCloudSyncStatus('error');
+    } finally {
+      setIsInitialHydrated(true);
+    }
+  };
+
+  // Function to push full local state to Gist
+  const pushToCloudGist = async () => {
+    setCloudSyncStatus('syncing');
+    setSyncError(null);
+    try {
+      const payload: GistDatabasePayload = {
+        version: 2,
+        lastUpdated: new Date().toISOString(),
+        updatedBy: currentUser?.name || 'مستخدم النظام',
+        requests,
+        userAccounts,
+        services,
+        notifications,
+        clubsList: CLUBS_LIST,
+      };
+
+      const pushRes = await pushGistDatabase(payload, currentUser?.name);
+      if (pushRes.success) {
+        const nowFormatted = new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        setLastSyncTime(nowFormatted);
+        setCloudSyncStatus('synced');
+      } else {
+        setSyncError(pushRes.error || 'تعذر حفظ البيانات في السحابة');
+        setCloudSyncStatus('error');
+      }
+    } catch (e: any) {
+      setSyncError(e.message || 'خطأ أثناء رفع البيانات');
+      setCloudSyncStatus('error');
+    }
+  };
+
+  // Initial mount: Pull cloud data from Gist
+  useEffect(() => {
+    pullFromCloudGist(false);
+  }, []);
+
+  // Periodic polling every 25 seconds for cross-device live sync
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible' && cloudSyncStatus !== 'syncing') {
+        pullFromCloudGist(true);
+      }
+    }, 25000);
+    return () => clearInterval(interval);
+  }, [cloudSyncStatus]);
+
+  // Debounced auto-save to Gist when state changes (after initial hydration)
+  useEffect(() => {
+    if (!isInitialHydrated) return;
+
+    const timer = setTimeout(() => {
+      const payload: GistDatabasePayload = {
+        version: 2,
+        lastUpdated: new Date().toISOString(),
+        updatedBy: currentUser?.name || 'تحديث تلقائي',
+        requests,
+        userAccounts,
+        services,
+        notifications,
+        clubsList: CLUBS_LIST,
+      };
+      
+      pushGistDatabase(payload, currentUser?.name).then(res => {
+        if (res.success) {
+          const nowFormatted = new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          setLastSyncTime(nowFormatted);
+          setCloudSyncStatus('synced');
+        }
+      }).catch(err => {
+        console.warn('Background Gist push failed:', err);
+      });
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [requests, userAccounts, services, notifications, isInitialHydrated]);
 
   // Sync to localStorage
   useEffect(() => {
@@ -1054,6 +1181,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setActiveQuickServiceId,
         isUserProfileModalOpen,
         setIsUserProfileModalOpen,
+        isSyncModalOpen,
+        setIsSyncModalOpen,
+        cloudSyncStatus,
+        lastSyncTime,
+        syncError,
+        triggerManualSync: () => pullFromCloudGist(false),
+        triggerManualPush: pushToCloudGist,
         resetToSampleData,
       }}
     >

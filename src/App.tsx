@@ -12,6 +12,7 @@ import { RequestDetailsModal } from './components/RequestDetailsModal';
 import { StaffReferenceGuideModal } from './components/StaffReferenceGuideModal';
 import { UserProfileModal } from './components/UserProfileModal';
 import { LoginPortal } from './components/LoginPortal';
+import { CloudSyncModal } from './components/CloudSyncModal';
 
 const MainContent: React.FC = () => {
   const {
@@ -26,6 +27,8 @@ const MainContent: React.FC = () => {
     setIsQuickServiceModalOpen,
     activeQuickServiceId,
     setActiveQuickServiceId,
+    isSyncModalOpen,
+    setIsSyncModalOpen,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'main' | 'calendar' | 'all_tasks'>('main');
@@ -48,6 +51,10 @@ const MainContent: React.FC = () => {
         <StaffReferenceGuideModal
           isOpen={isReferenceGuideOpen}
           onClose={() => setIsReferenceGuideOpen(false)}
+        />
+        <CloudSyncModal
+          isOpen={isSyncModalOpen}
+          onClose={() => setIsSyncModalOpen(false)}
         />
       </>
     );
@@ -164,6 +171,11 @@ const MainContent: React.FC = () => {
       <StaffReferenceGuideModal
         isOpen={isReferenceGuideOpen}
         onClose={() => setIsReferenceGuideOpen(false)}
+      />
+
+      <CloudSyncModal
+        isOpen={isSyncModalOpen}
+        onClose={() => setIsSyncModalOpen(false)}
       />
     </div>
   );

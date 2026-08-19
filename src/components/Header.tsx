@@ -12,9 +12,11 @@ import {
   LogOut,
   ShieldCheck,
   Lock,
-  User
+  User,
+  Cloud
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { CloudSyncIndicator } from './CloudSyncIndicator';
 
 interface HeaderProps {
   onOpenReferenceGuide: () => void;
@@ -39,6 +41,7 @@ export const Header: React.FC<HeaderProps> = ({
     markAllNotificationsAsRead,
     setIsNewRequestModalOpen,
     setIsUserProfileModalOpen,
+    setIsSyncModalOpen,
     setSelectedRequestId,
     resetToSampleData,
   } = useApp();
@@ -217,6 +220,9 @@ export const Header: React.FC<HeaderProps> = ({
                 <span>تقديم طلب جديد</span>
               </button>
             )}
+
+            {/* Cloud Sync Indicator */}
+            <CloudSyncIndicator onClick={() => setIsSyncModalOpen(true)} />
 
             {/* Notifications Popover */}
             <div className="relative">

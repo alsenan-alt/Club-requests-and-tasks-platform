@@ -14,18 +14,25 @@ import {
   AlertTriangle,
   KeyRound,
   ShieldAlert,
-  HelpCircle
+  HelpCircle,
+  Cloud
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { STAFF_MEMBERS, DEPARTMENTS } from '../data/initialData';
 import { RoleType, UserAccount } from '../types';
+import { CloudSyncIndicator } from './CloudSyncIndicator';
 
 interface Props {
   onOpenReferenceGuide: () => void;
 }
 
 export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
-  const { validateAndLogin, userAccounts, registerNewClubPresident } = useApp();
+  const { 
+    validateAndLogin, 
+    userAccounts, 
+    registerNewClubPresident, 
+    setIsSyncModalOpen 
+  } = useApp();
 
   const [activeTab, setActiveTab] = useState<'clubs' | 'register_club' | 'staff' | 'admin'>('clubs');
   
@@ -184,13 +191,17 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
           </div>
         </div>
 
-        <button
-          onClick={onOpenReferenceGuide}
-          className="text-xs text-slate-300 hover:text-white bg-white/10 hover:bg-white/15 px-3.5 py-1.5 rounded-xl border border-white/10 transition-colors flex items-center gap-1.5 cursor-pointer backdrop-blur-xs"
-        >
-          <HelpCircle className="w-3.5 h-3.5 text-emerald-400" />
-          <span>دليل المهام والمسؤوليات</span>
-        </button>
+        <div className="flex items-center gap-2.5">
+          <CloudSyncIndicator onClick={() => setIsSyncModalOpen(true)} />
+
+          <button
+            onClick={onOpenReferenceGuide}
+            className="text-xs text-slate-300 hover:text-white bg-white/10 hover:bg-white/15 px-3.5 py-1.5 rounded-xl border border-white/10 transition-colors flex items-center gap-1.5 cursor-pointer backdrop-blur-xs"
+          >
+            <HelpCircle className="w-3.5 h-3.5 text-emerald-400" />
+            <span>دليل المهام والمسؤوليات</span>
+          </button>
+        </div>
       </div>
 
       {/* Main Login Card */}
