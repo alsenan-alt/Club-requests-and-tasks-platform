@@ -72,27 +72,27 @@ export const AdminOverviewView: React.FC<Props> = ({ onOpenRequestDetails }) => 
             <button
               id="btn-admin-cloud-sync"
               onClick={() => setIsSyncModalOpen(true)}
-              className="bg-white/10 hover:bg-white/20 border border-white/20 text-white px-4 py-2.5 rounded-2xl backdrop-blur-md transition-all flex items-center gap-3 text-xs font-bold shadow-xs cursor-pointer group"
-              title="إدارة المزامنة السحابية مع GitHub Gist (خاص بإدارة النشاط)"
+              className="bg-purple-600/30 hover:bg-purple-600/50 border border-purple-400/40 text-white px-4 py-2.5 rounded-2xl backdrop-blur-md transition-all flex items-center gap-3 text-xs font-bold shadow-md cursor-pointer group hover:scale-[1.02]"
+              title="إدارة المزامنة وقاعدة البيانات السحابية مع GitHub Sync Repository (خاص بإدارة النشاط)"
             >
-              <div className="w-8 h-8 rounded-xl bg-purple-500/30 flex items-center justify-center text-purple-200 border border-purple-400/30 group-hover:scale-105 transition-transform">
+              <div className="w-9 h-9 rounded-xl bg-purple-500/40 flex items-center justify-center text-purple-200 border border-purple-300/40 group-hover:scale-110 transition-transform">
                 {cloudSyncStatus === 'synced' ? (
-                  <CloudCheck className="w-4 h-4 text-emerald-400" />
+                  <CloudCheck className="w-5 h-5 text-emerald-400" />
                 ) : cloudSyncStatus === 'syncing' ? (
-                  <RefreshCw className="w-4 h-4 text-blue-400 animate-spin" />
+                  <RefreshCw className="w-5 h-5 text-blue-400 animate-spin" />
                 ) : cloudSyncStatus === 'error' ? (
-                  <CloudOff className="w-4 h-4 text-rose-400" />
+                  <CloudOff className="w-5 h-5 text-rose-400" />
                 ) : (
-                  <Cloud className="w-4 h-4 text-purple-200" />
+                  <Cloud className="w-5 h-5 text-purple-200" />
                 )}
               </div>
               <div className="text-right">
-                <span className="block text-[10px] text-purple-200 font-medium">المزامنة وقاعدة البيانات</span>
+                <span className="block text-[10px] text-purple-200 font-medium">مستودع المزامنة السحابية</span>
                 <span className="text-xs text-white font-bold flex items-center gap-1.5">
                   <span>
-                    {cloudSyncStatus === 'synced' ? 'متزامن سحابياً' : 
+                    {cloudSyncStatus === 'synced' ? 'GitHub Sync (متزامن)' : 
                      cloudSyncStatus === 'syncing' ? 'جاري المزامنة...' : 
-                     cloudSyncStatus === 'error' ? 'تنبيه المزامنة' : 'إعدادات Gist'}
+                     cloudSyncStatus === 'error' ? 'تنبيه المزامنة' : 'إدارة GitHub Sync'}
                   </span>
                   {cloudSyncStatus === 'synced' && (
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />

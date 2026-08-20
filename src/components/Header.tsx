@@ -12,11 +12,9 @@ import {
   LogOut,
   ShieldCheck,
   Lock,
-  User,
-  Cloud
+  User
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { CloudSyncIndicator } from './CloudSyncIndicator';
 
 interface HeaderProps {
   onOpenReferenceGuide: () => void;
@@ -219,11 +217,6 @@ export const Header: React.FC<HeaderProps> = ({
                 <Plus className="w-4 h-4" />
                 <span>تقديم طلب جديد</span>
               </button>
-            )}
-
-            {/* Cloud Sync Indicator - Exclusive to General Admin (إدارة النشاط) */}
-            {currentRole === 'admin' && (
-              <CloudSyncIndicator onClick={() => setIsSyncModalOpen(true)} />
             )}
 
             {/* Notifications Popover */}
