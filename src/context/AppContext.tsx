@@ -85,8 +85,10 @@ interface AppContextType {
   updateTaskDetail: (taskId: string, keyOrLabel: string, value: any) => void;
   addGuestToTask: (taskId: string, guest: any) => void;
   removeGuestFromTask: (taskId: string, guestId: string) => void;
-  deleteRequest: (requestId: string) => void;
+  deleteTask: (taskId: string) => { success: boolean; message: string };
+  deleteRequest: (requestId: string) => { success: boolean; message: string };
   services: ServiceItem[];
+  updateServiceInfo: (serviceId: string, updates: { name?: string; description?: string; iconName?: string; restrictedToVip?: boolean }) => { success: boolean; message: string };
   addServiceField: (serviceId: string, newField: ServiceField) => { success: boolean; message: string };
   updateServiceField: (serviceId: string, fieldId: string, updatedField: Partial<ServiceField>) => { success: boolean; message: string };
   deleteServiceField: (serviceId: string, fieldId: string) => { success: boolean; message: string };
@@ -1033,11 +1035,128 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const deleteRequest = (requestId: string) => {
+  const deleteTask = (taskId: string): { success: boolean; message: string } => {
+    let deletedServiceName = '';
+    let parentEventTitle = '';
+    let remainingCount = 0;
+    const timestamp = new Date().toISOString();
+
+    setRequests(prev => {
+      const targetReq = prev.find(r => r.tasks.some(t => t.id === taskId));
+      if (!targetReq) return prev;
+
+      const targetTask = targetReq.tasks.find(t => t.id === taskId);
+      if (targetTask) {
+        deletedServiceName = targetTask.serviceName;
+      }
+      parentEventTitle = targetReq.eventTitle;
+
+      const remainingTasks = targetReq.tasks.filter(t => t.id !== taskId);
+      remainingCount = remainingTasks.length;
+
+      // If no tasks remain, remove the entire request
+      if (remainingTasks.length === 0) {
+        return prev.filter(r => r.id !== targetReq.id);
+      }
+
+      // Otherwise, update tasks and re-calculate status
+      const updatedStatus = calculateRequestStatus(remainingTasks);
+      return prev.map(r => {
+        if (r.id !== targetReq.id) return r;
+        return {
+          ...r,
+          status: updatedStatus,
+          tasks: remainingTasks,
+          updatedAt: timestamp,
+        };
+      });
+    });
+
+    if (selectedRequestId && requests.find(r => r.id === selectedRequestId && r.tasks.length <= 1 && r.tasks.some(t => t.id === taskId))) {
+      setSelectedRequestId(null);
+    }
+
+    // Add notification
+    setNotifications(prev => [
+      {
+        id: `notif-del-tsk-${Date.now()}`,
+        title: `حذف مهمة: ${deletedServiceName || 'خدمة'}`,
+        message: remainingCount === 0 
+          ? `تم حذف المهمة وإلغاء الطلب (${parentEventTitle}) لعدم وجود مهام متبقية.`
+          : `تم حذف مهمة (${deletedServiceName}) من طلب الفعالية (${parentEventTitle}).`,
+        targetRole: 'all',
+        timestamp,
+        read: false,
+        type: 'alert',
+      },
+      ...prev,
+    ]);
+
+    return { 
+      success: true, 
+      message: remainingCount === 0 
+        ? `تم حذف المهمة وإلغاء الطلب (${parentEventTitle}) بنجاح` 
+        : `تم حذف مهمة (${deletedServiceName}) بنجاح` 
+    };
+  };
+
+  const deleteRequest = (requestId: string): { success: boolean; message: string } => {
+    let deletedTitle = '';
+    let reqNum = '';
+    const target = requests.find(r => r.id === requestId);
+    if (target) {
+      deletedTitle = target.eventTitle;
+      reqNum = target.requestNumber;
+    }
+    const timestamp = new Date().toISOString();
+
     setRequests(prev => prev.filter(r => r.id !== requestId));
     if (selectedRequestId === requestId) {
       setSelectedRequestId(null);
     }
+
+    if (deletedTitle) {
+      setNotifications(prev => [
+        {
+          id: `notif-del-req-${Date.now()}`,
+          title: `حذف طلب: ${deletedTitle}`,
+          message: `تم حذف طلب الفعالية (${deletedTitle} - ${reqNum}) وكافة المهام التابعة له نهائياً.`,
+          targetRole: 'all',
+          timestamp,
+          read: false,
+          type: 'alert',
+        },
+        ...prev,
+      ]);
+    }
+
+    return { success: true, message: `تم حذف الطلب (${deletedTitle || requestId}) بالكامل بنجاح` };
+  };
+
+  // Update Service Title / Name, Description, and Icon
+  const updateServiceInfo = (
+    serviceId: string, 
+    updates: { name?: string; description?: string; iconName?: string; restrictedToVip?: boolean }
+  ): { success: boolean; message: string } => {
+    let updatedTitle = '';
+    setServices(prev => prev.map(s => {
+      if (s.id === serviceId) {
+        updatedTitle = updates.name?.trim() || s.name;
+        return {
+          ...s,
+          name: updates.name?.trim() ? updates.name.trim() : s.name,
+          description: updates.description !== undefined ? updates.description.trim() : s.description,
+          iconName: updates.iconName || s.iconName,
+          restrictedToVip: updates.restrictedToVip !== undefined ? updates.restrictedToVip : s.restrictedToVip,
+        };
+      }
+      return s;
+    }));
+
+    return { 
+      success: true, 
+      message: `تم تحديث مسمى وبيانات الخدمة (${updatedTitle}) بنجاح!` 
+    };
   };
 
   // Staff Service Fields Configuration Methods
@@ -1155,8 +1274,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateTaskDetail,
         addGuestToTask,
         removeGuestFromTask,
+        deleteTask,
         deleteRequest,
         services,
+        updateServiceInfo,
         addServiceField,
         updateServiceField,
         deleteServiceField,

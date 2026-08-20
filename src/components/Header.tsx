@@ -221,8 +221,10 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* Cloud Sync Indicator */}
-            <CloudSyncIndicator onClick={() => setIsSyncModalOpen(true)} />
+            {/* Cloud Sync Indicator - Exclusive to General Admin (إدارة النشاط) */}
+            {currentRole === 'admin' && (
+              <CloudSyncIndicator onClick={() => setIsSyncModalOpen(true)} />
+            )}
 
             {/* Notifications Popover */}
             <div className="relative">

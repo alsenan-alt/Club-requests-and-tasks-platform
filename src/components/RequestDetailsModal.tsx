@@ -16,12 +16,14 @@ import {
   Sparkles, 
   MessageSquare,
   ShieldCheck,
-  FileText
+  FileText,
+  Trash2
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { STAFF_MEMBERS, DEPARTMENTS } from '../data/initialData';
 import { Task, TaskStatus } from '../types';
 import { TaskRequirementsViewer } from './TaskRequirementsViewer';
+import { DeleteConfirmationModal } from './DeleteConfirmationModal';
 
 interface Props {
   requestId: string | null;
@@ -34,11 +36,14 @@ export const RequestDetailsModal: React.FC<Props> = ({ requestId, onClose }) => 
     currentRole, 
     currentStaff, 
     updateTaskStatus, 
-    addTaskComment 
+    addTaskComment,
+    deleteTask,
+    deleteRequest
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'print_form'>('overview');
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
+  const [deletingTarget, setDeletingTarget] = useState<{ task?: Task; request: any } | null>(null);
 
   const request = requests.find(r => r.id === requestId);
 
@@ -204,25 +209,38 @@ export const RequestDetailsModal: React.FC<Props> = ({ requestId, onClose }) => 
                         />
 
                         {/* Action buttons if current user is assignee or admin */}
-                        {(isAssignee || currentRole === 'admin') && task.status !== 'completed' && (
-                          <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
-                            <span className="text-xs font-bold text-slate-600">إجراءات الموظف:</span>
-                            {task.status === 'pending' && (
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-100 flex-wrap gap-2">
+                          {(isAssignee || currentRole === 'admin') && task.status !== 'completed' ? (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-slate-600">إجراءات الموظف:</span>
+                              {task.status === 'pending' && (
+                                <button
+                                  onClick={() => updateTaskStatus(task.id, 'in_progress', 'تم بدء العمل على التجهيزات')}
+                                  className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg cursor-pointer"
+                                >
+                                  بدء التجهيز
+                                </button>
+                              )}
                               <button
-                                onClick={() => updateTaskStatus(task.id, 'in_progress', 'تم بدء العمل على التجهيزات')}
-                                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg cursor-pointer"
+                                onClick={() => updateTaskStatus(task.id, 'completed', 'تم إنجاز وتأكيد الخدمة بالكامل')}
+                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg cursor-pointer"
                               >
-                                بدء التجهيز
+                                اعتماد الإنجاز
                               </button>
-                            )}
-                            <button
-                              onClick={() => updateTaskStatus(task.id, 'completed', 'تم إنجاز وتأكيد الخدمة بالكامل')}
-                              className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg cursor-pointer"
-                            >
-                              اعتماد الإنجاز
-                            </button>
-                          </div>
-                        )}
+                            </div>
+                          ) : <div />}
+
+                          {/* Delete Task Button */}
+                          <button
+                            type="button"
+                            onClick={() => setDeletingTarget({ task, request })}
+                            className="px-2.5 py-1 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-rose-200 flex items-center gap-1.5 cursor-pointer ml-auto"
+                            title="حذف هذه المهمة المحددة"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>حذف المهمة</span>
+                          </button>
+                        </div>
 
                         {/* Task Comments Section */}
                         <div className="space-y-2 pt-2 border-t border-slate-100">
@@ -351,7 +369,16 @@ export const RequestDetailsModal: React.FC<Props> = ({ requestId, onClose }) => 
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 bg-white border-t border-slate-200 flex justify-end">
+        <div className="p-4 bg-white border-t border-slate-200 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => setDeletingTarget({ request })}
+            className="px-4 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors border border-rose-200 flex items-center gap-1.5 cursor-pointer"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>حذف الطلب كاملاً</span>
+          </button>
+
           <button
             onClick={onClose}
             className="px-5 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
@@ -361,6 +388,21 @@ export const RequestDetailsModal: React.FC<Props> = ({ requestId, onClose }) => 
         </div>
 
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        isOpen={Boolean(deletingTarget)}
+        task={deletingTarget?.task}
+        request={deletingTarget?.request}
+        onClose={() => setDeletingTarget(null)}
+        onConfirmDeleteTask={(taskId) => {
+          deleteTask(taskId);
+        }}
+        onConfirmDeleteRequest={(reqId) => {
+          deleteRequest(reqId);
+          onClose();
+        }}
+      />
     </div>
   );
 };

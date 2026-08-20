@@ -27,11 +27,15 @@ import {
   Mail, 
   ExternalLink,
   Filter,
-  Check
+  Check,
+  Edit3,
+  Trash2
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { AVAILABLE_SERVICES, DEPARTMENTS, STAFF_MEMBERS, CLUBS_LIST } from '../data/initialData';
-import { ClubRequest, Task, TaskStatus } from '../types';
+import { DEPARTMENTS, STAFF_MEMBERS, CLUBS_LIST } from '../data/initialData';
+import { ClubRequest, Task, TaskStatus, ServiceItem } from '../types';
+import { EditServiceTitleModal } from './EditServiceTitleModal';
+import { DeleteConfirmationModal } from './DeleteConfirmationModal';
 
 interface Props {
   onOpenNewWizard: () => void;
@@ -48,12 +52,17 @@ export const ClubPresidentView: React.FC<Props> = ({
     currentUser,
     activeClubName, 
     visibleRequests, 
-    setSelectedRequestId 
+    setSelectedRequestId,
+    services,
+    deleteTask,
+    deleteRequest
   } = useApp();
 
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedRequestId, setExpandedRequestId] = useState<string | null>(visibleRequests[0]?.id || null);
+  const [editingServiceForTitle, setEditingServiceForTitle] = useState<ServiceItem | null>(null);
+  const [deletingTarget, setDeletingTarget] = useState<{ task?: Task; request: ClubRequest } | null>(null);
 
   // Strict Privacy: Only show requests authorized for this club
   const displayedRequests = visibleRequests;
@@ -202,7 +211,7 @@ export const ClubPresidentView: React.FC<Props> = ({
               الخدمات المباشرة السريعة
             </h3>
             <p className="text-xs text-slate-500">
-              انقر على أي خدمة لطلبها مباشرة وتوجيهها للموظف المسؤول
+              انقر على أي خدمة لطلبها مباشرة وتوجيهها للموظف المسؤول، أو عدّل مسمياتها
             </p>
           </div>
           <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
@@ -211,23 +220,42 @@ export const ClubPresidentView: React.FC<Props> = ({
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          {AVAILABLE_SERVICES.filter(s => !s.restrictedToVip).map(srv => {
+          {services.filter(s => !s.restrictedToVip).map(srv => {
             const staff = STAFF_MEMBERS.find(sm => sm.id === srv.staffId);
             const dept = DEPARTMENTS[srv.departmentId];
 
             return (
-              <button
+              <div
                 key={srv.id}
                 onClick={() => onOpenQuickService(srv.id)}
-                className="bg-white p-4 rounded-2xl border border-slate-200 hover:border-emerald-500 hover:shadow-md transition-all text-right group cursor-pointer flex flex-col justify-between"
+                className="bg-white p-4 rounded-2xl border border-slate-200 hover:border-emerald-500 hover:shadow-md transition-all text-right group cursor-pointer flex flex-col justify-between relative"
               >
                 <div>
-                  <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-700 group-hover:bg-emerald-600 group-hover:text-white transition-colors flex items-center justify-center mb-3">
-                    {getServiceIcon(srv.iconName)}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-700 group-hover:bg-emerald-600 group-hover:text-white transition-colors flex items-center justify-center">
+                      {getServiceIcon(srv.iconName)}
+                    </div>
+                    
+                    {/* Quick Edit Title Button */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingServiceForTitle(srv);
+                      }}
+                      title="تعديل عنوان ومسمى الخدمة"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 opacity-70 group-hover:opacity-100 transition-all cursor-pointer"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                  <h4 className="text-xs font-bold text-slate-900 group-hover:text-emerald-700 transition-colors">
-                    {srv.name}
-                  </h4>
+
+                  <div className="flex items-center justify-between gap-1">
+                    <h4 className="text-xs font-bold text-slate-900 group-hover:text-emerald-700 transition-colors">
+                      {srv.name}
+                    </h4>
+                  </div>
+
                   <p className="text-[11px] text-slate-500 line-clamp-2 mt-1">
                     {srv.description}
                   </p>
@@ -237,7 +265,7 @@ export const ClubPresidentView: React.FC<Props> = ({
                   <span className="font-semibold text-slate-600">المسؤول: {staff?.shortName}</span>
                   <span className="text-emerald-600 font-bold group-hover:translate-x-[-2px] transition-transform">طلب ➔</span>
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>
@@ -374,6 +402,16 @@ export const ClubPresidentView: React.FC<Props> = ({
                         <span>التقرير والطباعة</span>
                       </button>
 
+                      {/* Delete / Cancel Request Button */}
+                      <button
+                        type="button"
+                        onClick={() => setDeletingTarget({ request: req })}
+                        className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer border border-slate-200"
+                        title="حذف أو إلغاء هذا الطلب"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+
                       {/* Expand / Collapse Tree Toggle */}
                       <button
                         onClick={() => setExpandedRequestId(isExpanded ? null : req.id)}
@@ -472,6 +510,25 @@ export const ClubPresidentView: React.FC<Props> = ({
         )}
 
       </div>
+
+      <EditServiceTitleModal
+        isOpen={Boolean(editingServiceForTitle)}
+        service={editingServiceForTitle}
+        onClose={() => setEditingServiceForTitle(null)}
+      />
+
+      <DeleteConfirmationModal
+        isOpen={Boolean(deletingTarget)}
+        task={deletingTarget?.task}
+        request={deletingTarget?.request}
+        onClose={() => setDeletingTarget(null)}
+        onConfirmDeleteTask={(taskId) => {
+          deleteTask(taskId);
+        }}
+        onConfirmDeleteRequest={(reqId) => {
+          deleteRequest(reqId);
+        }}
+      />
 
     </div>
   );

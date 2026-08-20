@@ -19,11 +19,15 @@ async function startServer() {
   });
 
   // API Route: Get Gist Data
-  app.get('/api/sync/gist', async (_req, res) => {
+  app.get('/api/sync/gist', async (req, res) => {
     try {
-      const token = process.env.GITHUB_TOKEN || GITHUB_TOKEN;
-      const gistId = process.env.GITHUB_GIST_ID || GIST_ID;
-      const filename = process.env.GITHUB_GIST_FILENAME || GIST_FILENAME;
+      const headerToken = req.headers['x-github-token'] as string;
+      const headerGistId = req.headers['x-gist-id'] as string;
+      const headerFilename = req.headers['x-gist-filename'] as string;
+
+      const token = headerToken || process.env.GITHUB_TOKEN || GITHUB_TOKEN;
+      const gistId = headerGistId || process.env.GITHUB_GIST_ID || GIST_ID;
+      const filename = headerFilename || process.env.GITHUB_GIST_FILENAME || GIST_FILENAME;
 
       // First try fetching directly from GitHub Gist API with auth
       const response = await fetch(`https://api.github.com/gists/${gistId}`, {
@@ -58,7 +62,8 @@ async function startServer() {
       }
 
       // Fallback: Fetch from Raw URL with cache busting
-      const rawRes = await fetch(`${RAW_URL}?t=${Date.now()}`);
+      const currentRawUrl = `https://gist.githubusercontent.com/alsenan-alt/${gistId}/raw/${encodeURIComponent(filename)}`;
+      const rawRes = await fetch(`${currentRawUrl}?t=${Date.now()}`);
       if (rawRes.ok) {
         const rawJson = await rawRes.json();
         return res.json({
@@ -85,9 +90,13 @@ async function startServer() {
   app.post('/api/sync/gist', async (req, res) => {
     try {
       const payload = req.body;
-      const token = process.env.GITHUB_TOKEN || GITHUB_TOKEN;
-      const gistId = process.env.GITHUB_GIST_ID || GIST_ID;
-      const filename = process.env.GITHUB_GIST_FILENAME || GIST_FILENAME;
+      const headerToken = req.headers['x-github-token'] as string;
+      const headerGistId = req.headers['x-gist-id'] as string;
+      const headerFilename = req.headers['x-gist-filename'] as string;
+
+      const token = headerToken || process.env.GITHUB_TOKEN || GITHUB_TOKEN;
+      const gistId = headerGistId || process.env.GITHUB_GIST_ID || GIST_ID;
+      const filename = headerFilename || process.env.GITHUB_GIST_FILENAME || GIST_FILENAME;
 
       if (!payload || typeof payload !== 'object') {
         return res.status(400).json({ success: false, error: 'Invalid payload' });
@@ -114,8 +123,7 @@ async function startServer() {
       });
 
       if (!patchResponse.ok) {
-        const errorDetails = await patchResponse.text();
-        console.error('GitHub API error on PATCH:', errorDetails);
+        const errorDetails = await patchResponse.text().catch(() => '');
         return res.status(patchResponse.status).json({
           success: false,
           error: `GitHub Gist update failed: ${patchResponse.statusText}`,

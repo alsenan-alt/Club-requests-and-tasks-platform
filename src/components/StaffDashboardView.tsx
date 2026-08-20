@@ -25,13 +25,15 @@ import {
   Utensils,
   ChevronDown,
   ChevronUp,
-  FileText
+  FileText,
+  Trash2
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { DEPARTMENTS } from '../data/initialData';
-import { Task, TaskStatus, StaffMember } from '../types';
+import { Task, TaskStatus, StaffMember, ClubRequest } from '../types';
 import { StaffServicesCatalogManager } from './StaffServicesCatalogManager';
 import { TaskRequirementsViewer } from './TaskRequirementsViewer';
+import { DeleteConfirmationModal } from './DeleteConfirmationModal';
 
 interface Props {
   staff: StaffMember;
@@ -42,7 +44,9 @@ export const StaffDashboardView: React.FC<Props> = ({ staff, onOpenRequestDetail
   const { 
     requests, 
     updateTaskStatus, 
-    addTaskComment 
+    addTaskComment,
+    deleteTask,
+    deleteRequest
   } = useApp();
 
   const [activeMainTab, setActiveMainTab] = useState<'all_view' | 'services_config' | 'tasks_board'>('all_view');
@@ -51,6 +55,7 @@ export const StaffDashboardView: React.FC<Props> = ({ staff, onOpenRequestDetail
   const [activeCommentTaskId, setActiveCommentTaskId] = useState<string | null>(null);
   const [commentText, setCommentText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [deletingTarget, setDeletingTarget] = useState<{ task: Task; request: ClubRequest } | null>(null);
 
   // Extract all tasks belonging to this staff member
   const allStaffTasks: { task: Task; request: any }[] = [];
@@ -510,6 +515,16 @@ export const StaffDashboardView: React.FC<Props> = ({ staff, onOpenRequestDetail
                         <FileText className="w-4 h-4" />
                       </button>
 
+                      {/* Delete Task or Request Button */}
+                      <button
+                        type="button"
+                        onClick={() => setDeletingTarget({ task, request })}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer border border-slate-200"
+                        title="حذف المهمة أو الطلب"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+
                     </div>
 
                   </div>
@@ -522,6 +537,20 @@ export const StaffDashboardView: React.FC<Props> = ({ staff, onOpenRequestDetail
       )}
       </section>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        isOpen={Boolean(deletingTarget)}
+        task={deletingTarget?.task}
+        request={deletingTarget?.request}
+        onClose={() => setDeletingTarget(null)}
+        onConfirmDeleteTask={(taskId) => {
+          deleteTask(taskId);
+        }}
+        onConfirmDeleteRequest={(requestId) => {
+          deleteRequest(requestId);
+        }}
+      />
 
     </div>
   );

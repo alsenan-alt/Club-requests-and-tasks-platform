@@ -30,6 +30,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { DEPARTMENTS } from '../data/initialData';
 import { StaffMember, ServiceItem, ServiceField } from '../types';
+import { EditServiceTitleModal } from './EditServiceTitleModal';
 
 interface Props {
   staff?: StaffMember;
@@ -48,6 +49,7 @@ export const StaffServicesCatalogManager: React.FC<Props> = ({ staff }) => {
   const [expandedServiceId, setExpandedServiceId] = useState<string | null>(null);
   const [addingFieldToServiceId, setAddingFieldToServiceId] = useState<string | null>(null);
   const [editingFieldInfo, setEditingFieldInfo] = useState<{ serviceId: string; field: ServiceField } | null>(null);
+  const [editingServiceForTitle, setEditingServiceForTitle] = useState<ServiceItem | null>(null);
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
 
   // New field form state
@@ -255,6 +257,17 @@ export const StaffServicesCatalogManager: React.FC<Props> = ({ staff }) => {
                       <h4 className="text-sm sm:text-base font-bold text-slate-900 truncate">
                         {srv.name}
                       </h4>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingServiceForTitle(srv);
+                        }}
+                        className="p-1 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                        title="تعديل عنوان ومسمى الخدمة وأيقونتها"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${dept?.badgeBg || 'bg-slate-100 text-slate-700'}`}>
                         {dept?.name}
                       </span>
@@ -269,6 +282,18 @@ export const StaffServicesCatalogManager: React.FC<Props> = ({ staff }) => {
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingServiceForTitle(srv);
+                    }}
+                    className="hidden sm:flex px-2.5 py-1.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 text-xs font-bold rounded-xl items-center gap-1 border border-slate-200 transition-all cursor-pointer"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>تعديل العنوان</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={(e) => {
@@ -540,6 +565,12 @@ export const StaffServicesCatalogManager: React.FC<Props> = ({ staff }) => {
           );
         })}
       </div>
+
+      <EditServiceTitleModal
+        isOpen={Boolean(editingServiceForTitle)}
+        service={editingServiceForTitle}
+        onClose={() => setEditingServiceForTitle(null)}
+      />
 
     </div>
   );
