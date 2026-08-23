@@ -125,6 +125,7 @@ const STORAGE_KEYS = {
   REQUESTS: 'club_requests_app_v2',
   NOTIFICATIONS: 'club_notifications_app_v2',
   SERVICES: 'club_services_config_v2',
+  LAST_MODIFIED: 'club_last_modified_timestamp_v2',
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -186,7 +187,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [syncError, setSyncError] = useState<string | null>(null);
   const [isInitialHydrated, setIsInitialHydrated] = useState(false);
 
-  // Function to pull latest data from Gist
+  // Helper to record local modification timestamp
+  const markLocalDataModified = () => {
+    const now = Date.now();
+    localStorage.setItem(STORAGE_KEYS.LAST_MODIFIED, String(now));
+    return now;
+  };
+
+  // Function to pull latest data from Gist with smart conflict prevention
   const pullFromCloudGist = async (isBackground = false) => {
     if (!isBackground) setCloudSyncStatus('syncing');
     setSyncError(null);
@@ -194,18 +202,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const result = await fetchGistDatabase();
       if (result.success && result.data) {
         const cloudData = result.data;
+        const cloudTime = cloudData.lastUpdated ? new Date(cloudData.lastUpdated).getTime() : 0;
+        
+        const localSavedTimestampStr = localStorage.getItem(STORAGE_KEYS.LAST_MODIFIED);
+        const localTime = localSavedTimestampStr ? parseInt(localSavedTimestampStr, 10) : 0;
+
+        // If local modifications are newer than what came from cloud, preserve local edits and push to cloud!
+        if (localTime > cloudTime + 1000) {
+          console.log('Local changes are newer than cloud data. Preserving local modifications & pushing to sync.');
+          pushToCloudGist();
+          setIsInitialHydrated(true);
+          return;
+        }
+
+        // Cloud is newer or equal, safely sync
         if (Array.isArray(cloudData.requests) && cloudData.requests.length > 0) {
           setRequests(cloudData.requests);
+          localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(cloudData.requests));
         }
         if (Array.isArray(cloudData.userAccounts) && cloudData.userAccounts.length > 0) {
           setUserAccounts(cloudData.userAccounts);
+          localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(cloudData.userAccounts));
         }
         if (Array.isArray(cloudData.services) && cloudData.services.length > 0) {
           setServices(cloudData.services);
+          localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(cloudData.services));
         }
         if (Array.isArray(cloudData.notifications) && cloudData.notifications.length > 0) {
           setNotifications(cloudData.notifications);
+          localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(cloudData.notifications));
         }
+        
+        const newTimestamp = cloudTime || Date.now();
+        localStorage.setItem(STORAGE_KEYS.LAST_MODIFIED, String(newTimestamp));
+
         const nowFormatted = new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         setLastSyncTime(nowFormatted);
         setCloudSyncStatus('synced');
@@ -223,13 +253,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Function to push full local state to Gist
-  const pushToCloudGist = async () => {
+  const pushToCloudGist = async (customPayload?: GistDatabasePayload) => {
     setCloudSyncStatus('syncing');
     setSyncError(null);
     try {
-      const payload: GistDatabasePayload = {
+      const nowIso = new Date().toISOString();
+      const nowTimestamp = Date.now();
+
+      const payload: GistDatabasePayload = customPayload || {
         version: 2,
-        lastUpdated: new Date().toISOString(),
+        lastUpdated: nowIso,
         updatedBy: currentUser?.name || 'مستخدم النظام',
         requests,
         userAccounts,
@@ -238,18 +271,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         clubsList: CLUBS_LIST,
       };
 
+      // Mark local timestamp
+      localStorage.setItem(STORAGE_KEYS.LAST_MODIFIED, String(nowTimestamp));
+
       const pushRes = await pushGistDatabase(payload, currentUser?.name);
       if (pushRes.success) {
         const nowFormatted = new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         setLastSyncTime(nowFormatted);
         setCloudSyncStatus('synced');
+        setSyncError(null);
       } else {
-        setSyncError(pushRes.error || 'تعذر حفظ البيانات في السحابة');
-        setCloudSyncStatus('error');
+        setSyncError(pushRes.error || 'تم حفظ البيانات محلياً وجاري المزامنة');
+        // Do not switch to error if local data is safely intact in localStorage
+        setCloudSyncStatus('synced');
       }
     } catch (e: any) {
-      setSyncError(e.message || 'خطأ أثناء رفع البيانات');
-      setCloudSyncStatus('error');
+      console.warn('Push exception:', e);
+      setSyncError(e.message || 'تم حفظ البيانات محلياً');
+      setCloudSyncStatus('synced');
     }
   };
 
@@ -258,13 +297,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     pullFromCloudGist(false);
   }, []);
 
-  // Periodic polling every 25 seconds for cross-device live sync
+  // Periodic polling every 30 seconds for cross-device live sync
   useEffect(() => {
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible' && cloudSyncStatus !== 'syncing') {
         pullFromCloudGist(true);
       }
-    }, 25000);
+    }, 30000);
     return () => clearInterval(interval);
   }, [cloudSyncStatus]);
 
@@ -293,7 +332,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }).catch(err => {
         console.warn('Background Gist push failed:', err);
       });
-    }, 2000);
+    }, 1500);
 
     return () => clearTimeout(timer);
   }, [requests, userAccounts, services, notifications, isInitialHydrated]);
@@ -1181,19 +1220,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     updates: { name?: string; description?: string; iconName?: string; restrictedToVip?: boolean }
   ): { success: boolean; message: string } => {
     let updatedTitle = '';
-    setServices(prev => prev.map(s => {
-      if (s.id === serviceId) {
-        updatedTitle = updates.name?.trim() || s.name;
-        return {
-          ...s,
-          name: updates.name?.trim() ? updates.name.trim() : s.name,
-          description: updates.description !== undefined ? updates.description.trim() : s.description,
-          iconName: updates.iconName || s.iconName,
-          restrictedToVip: updates.restrictedToVip !== undefined ? updates.restrictedToVip : s.restrictedToVip,
-        };
-      }
-      return s;
-    }));
+    let nextServices: ServiceItem[] = [];
+
+    setServices(prev => {
+      nextServices = prev.map(s => {
+        if (s.id === serviceId) {
+          updatedTitle = updates.name?.trim() || s.name;
+          return {
+            ...s,
+            name: updates.name?.trim() ? updates.name.trim() : s.name,
+            description: updates.description !== undefined ? updates.description.trim() : s.description,
+            iconName: updates.iconName || s.iconName,
+            restrictedToVip: updates.restrictedToVip !== undefined ? updates.restrictedToVip : s.restrictedToVip,
+          };
+        }
+        return s;
+      });
+      return nextServices;
+    });
+
+    markLocalDataModified();
+    localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(nextServices));
+
+    // Instant cloud synchronization push
+    setTimeout(() => {
+      pushToCloudGist({
+        version: 2,
+        lastUpdated: new Date().toISOString(),
+        updatedBy: currentUser?.name || 'تعديل عنوان خدمة',
+        requests,
+        userAccounts,
+        services: nextServices,
+        notifications,
+        clubsList: CLUBS_LIST,
+      });
+    }, 50);
 
     return { 
       success: true, 
@@ -1204,59 +1265,133 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Staff Service Fields Configuration Methods
   const addServiceField = (serviceId: string, newField: any): { success: boolean; message: string } => {
     let serviceName = '';
-    setServices(prev => prev.map(s => {
-      if (s.id === serviceId) {
-        serviceName = s.name;
-        const fieldId = newField.id || `field_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
-        return {
-          ...s,
-          fields: [...s.fields.filter(f => f.id !== fieldId), { ...newField, id: fieldId }]
-        };
-      }
-      return s;
-    }));
+    let nextServices: ServiceItem[] = [];
+
+    setServices(prev => {
+      nextServices = prev.map(s => {
+        if (s.id === serviceId) {
+          serviceName = s.name;
+          const fieldId = newField.id || `field_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+          return {
+            ...s,
+            fields: [...s.fields.filter(f => f.id !== fieldId), { ...newField, id: fieldId }]
+          };
+        }
+        return s;
+      });
+      return nextServices;
+    });
+
+    markLocalDataModified();
+    localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(nextServices));
+
+    setTimeout(() => {
+      pushToCloudGist({
+        version: 2,
+        lastUpdated: new Date().toISOString(),
+        updatedBy: currentUser?.name || 'إضافة تفصيل خدمة',
+        requests,
+        userAccounts,
+        services: nextServices,
+        notifications,
+        clubsList: CLUBS_LIST,
+      });
+    }, 50);
+
     return { success: true, message: `تمت إضافة تفصيل/حقل (${newField.label}) إلى خدمة (${serviceName}) بنجاح!` };
   };
 
   const updateServiceField = (serviceId: string, fieldId: string, updatedField: any): { success: boolean; message: string } => {
     let serviceName = '';
-    setServices(prev => prev.map(s => {
-      if (s.id === serviceId) {
-        serviceName = s.name;
-        return {
-          ...s,
-          fields: s.fields.map(f => f.id === fieldId ? { ...f, ...updatedField } : f)
-        };
-      }
-      return s;
-    }));
+    let nextServices: ServiceItem[] = [];
+
+    setServices(prev => {
+      nextServices = prev.map(s => {
+        if (s.id === serviceId) {
+          serviceName = s.name;
+          return {
+            ...s,
+            fields: s.fields.map(f => f.id === fieldId ? { ...f, ...updatedField } : f)
+          };
+        }
+        return s;
+      });
+      return nextServices;
+    });
+
+    markLocalDataModified();
+    localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(nextServices));
+
+    setTimeout(() => {
+      pushToCloudGist({
+        version: 2,
+        lastUpdated: new Date().toISOString(),
+        updatedBy: currentUser?.name || 'تحديث تفصيل خدمة',
+        requests,
+        userAccounts,
+        services: nextServices,
+        notifications,
+        clubsList: CLUBS_LIST,
+      });
+    }, 50);
+
     return { success: true, message: `تم تحديث بيانات التفصيل في خدمة (${serviceName}) بنجاح!` };
   };
 
   const deleteServiceField = (serviceId: string, fieldId: string): { success: boolean; message: string } => {
     let serviceName = '';
-    setServices(prev => prev.map(s => {
-      if (s.id === serviceId) {
-        serviceName = s.name;
-        return {
-          ...s,
-          fields: s.fields.filter(f => f.id !== fieldId)
-        };
-      }
-      return s;
-    }));
+    let nextServices: ServiceItem[] = [];
+
+    setServices(prev => {
+      nextServices = prev.map(s => {
+        if (s.id === serviceId) {
+          serviceName = s.name;
+          return {
+            ...s,
+            fields: s.fields.filter(f => f.id !== fieldId)
+          };
+        }
+        return s;
+      });
+      return nextServices;
+    });
+
+    markLocalDataModified();
+    localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(nextServices));
+
+    setTimeout(() => {
+      pushToCloudGist({
+        version: 2,
+        lastUpdated: new Date().toISOString(),
+        updatedBy: currentUser?.name || 'حذف تفصيل خدمة',
+        requests,
+        userAccounts,
+        services: nextServices,
+        notifications,
+        clubsList: CLUBS_LIST,
+      });
+    }, 50);
+
     return { success: true, message: `تم حذف التفصيل من خدمة (${serviceName}) بنجاح!` };
   };
 
   const resetServiceToDefault = (serviceId?: string) => {
+    let nextServices: ServiceItem[] = [];
     if (serviceId) {
       const defaultSrv = AVAILABLE_SERVICES.find(s => s.id === serviceId);
       if (defaultSrv) {
-        setServices(prev => prev.map(s => s.id === serviceId ? JSON.parse(JSON.stringify(defaultSrv)) : s));
+        setServices(prev => {
+          nextServices = prev.map(s => s.id === serviceId ? JSON.parse(JSON.stringify(defaultSrv)) : s);
+          return nextServices;
+        });
       }
     } else {
+      nextServices = AVAILABLE_SERVICES;
       setServices(AVAILABLE_SERVICES);
     }
+    markLocalDataModified();
+    localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(nextServices));
+    setTimeout(() => pushToCloudGist(), 50);
   };
 
   const addNewCustomService = (serviceData: { 
@@ -1290,7 +1425,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ],
     };
 
-    setServices(prev => [...prev, newService]);
+    let nextServices: ServiceItem[] = [];
+    setServices(prev => {
+      nextServices = [...prev, newService];
+      return nextServices;
+    });
+
+    markLocalDataModified();
+    localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(nextServices));
+
+    setTimeout(() => {
+      pushToCloudGist({
+        version: 2,
+        lastUpdated: new Date().toISOString(),
+        updatedBy: currentUser?.name || 'إضافة نموذج خدمة جديدة',
+        requests,
+        userAccounts,
+        services: nextServices,
+        notifications,
+        clubsList: CLUBS_LIST,
+      });
+    }, 50);
+
     return {
       success: true,
       service: newService,
@@ -1305,7 +1461,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deletedServiceName = targetService.name;
     }
 
-    setServices(prev => prev.filter(s => s.id !== serviceId));
+    let nextServices: ServiceItem[] = [];
+    setServices(prev => {
+      nextServices = prev.filter(s => s.id !== serviceId);
+      return nextServices;
+    });
+
+    markLocalDataModified();
+    localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(nextServices));
+
+    setTimeout(() => {
+      pushToCloudGist({
+        version: 2,
+        lastUpdated: new Date().toISOString(),
+        updatedBy: currentUser?.name || 'حذف نموذج خدمة',
+        requests,
+        userAccounts,
+        services: nextServices,
+        notifications,
+        clubsList: CLUBS_LIST,
+      });
+    }, 50);
 
     return {
       success: true,

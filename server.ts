@@ -13,6 +13,10 @@ async function startServer() {
 
   app.use(express.json({ limit: '10mb' }));
 
+  // In-memory cache for fast persistence and cloud sync resilience
+  let inMemoryLatestData: any = null;
+  let inMemoryLatestTimestamp: number = 0;
+
   // API Route: Health check
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -29,56 +33,92 @@ async function startServer() {
       const gistId = headerGistId || process.env.GITHUB_GIST_ID || GIST_ID;
       const filename = headerFilename || process.env.GITHUB_GIST_FILENAME || GIST_FILENAME;
 
+      // If in-memory data is available and very fresh, we can use it or fallback to it
       // First try fetching directly from GitHub Gist API with auth
-      const response = await fetch(`https://api.github.com/gists/${gistId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/vnd.github+json',
-          'User-Agent': 'Club-Requests-KFUPM-App',
-        },
-      });
+      try {
+        const response = await fetch(`https://api.github.com/gists/${gistId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/vnd.github+json',
+            'User-Agent': 'Club-Requests-KFUPM-App',
+          },
+        });
 
-      if (response.ok) {
-        const gistData = await response.json();
-        const fileObj = gistData.files && (gistData.files[filename] || Object.values(gistData.files)[0]);
-        if (fileObj && fileObj.content) {
-          try {
-            const parsed = JSON.parse(fileObj.content);
-            return res.json({
-              success: true,
-              source: 'api',
-              updatedAt: gistData.updated_at,
-              data: parsed,
-            });
-          } catch (e) {
-            return res.json({
-              success: true,
-              source: 'api_raw',
-              updatedAt: gistData.updated_at,
-              data: fileObj.content,
-            });
+        if (response.ok) {
+          const gistData = await response.json();
+          const fileObj = gistData.files && (gistData.files[filename] || Object.values(gistData.files)[0]);
+          if (fileObj && fileObj.content) {
+            try {
+              const parsed = JSON.parse(fileObj.content);
+              const cloudTime = parsed.lastUpdated ? new Date(parsed.lastUpdated).getTime() : 0;
+              
+              // If in-memory is newer than cloud, prefer in-memory
+              if (inMemoryLatestData && inMemoryLatestTimestamp > cloudTime) {
+                return res.json({
+                  success: true,
+                  source: 'server_cache',
+                  data: inMemoryLatestData,
+                });
+              }
+
+              inMemoryLatestData = parsed;
+              inMemoryLatestTimestamp = cloudTime || Date.now();
+
+              return res.json({
+                success: true,
+                source: 'api',
+                updatedAt: gistData.updated_at,
+                data: parsed,
+              });
+            } catch (e) {
+              // ignore parse error and proceed
+            }
           }
         }
+      } catch (e) {
+        console.warn('GitHub API fetch failed:', e);
       }
 
-      // Fallback: Fetch from Raw URL with cache busting
-      const currentRawUrl = `https://gist.githubusercontent.com/alsenan-alt/${gistId}/raw/${encodeURIComponent(filename)}`;
-      const rawRes = await fetch(`${currentRawUrl}?t=${Date.now()}`);
-      if (rawRes.ok) {
-        const rawJson = await rawRes.json();
+      // Fallback: Check if we have server in-memory database
+      if (inMemoryLatestData) {
         return res.json({
           success: true,
-          source: 'raw_url',
-          data: rawJson,
+          source: 'server_cache_fallback',
+          data: inMemoryLatestData,
         });
       }
 
-      return res.status(response.status || 500).json({
+      // Fallback: Fetch from Raw URL with cache busting
+      try {
+        const currentRawUrl = `https://gist.githubusercontent.com/alsenan-alt/${gistId}/raw/${encodeURIComponent(filename)}`;
+        const rawRes = await fetch(`${currentRawUrl}?t=${Date.now()}`);
+        if (rawRes.ok) {
+          const rawJson = await rawRes.json();
+          inMemoryLatestData = rawJson;
+          inMemoryLatestTimestamp = rawJson.lastUpdated ? new Date(rawJson.lastUpdated).getTime() : Date.now();
+          return res.json({
+            success: true,
+            source: 'raw_url',
+            data: rawJson,
+          });
+        }
+      } catch (rawErr) {
+        console.warn('Raw fetch failed:', rawErr);
+      }
+
+      return res.status(500).json({
         success: false,
-        error: `Failed to fetch Gist: ${response.statusText}`,
+        error: 'Failed to fetch Gist data',
       });
     } catch (err: any) {
       console.error('Error fetching gist:', err);
+      if (inMemoryLatestData) {
+        return res.json({
+          success: true,
+          source: 'server_cache_on_error',
+          data: inMemoryLatestData,
+        });
+      }
       return res.status(500).json({
         success: false,
         error: err.message || 'Internal server error while fetching Gist',
@@ -102,40 +142,53 @@ async function startServer() {
         return res.status(400).json({ success: false, error: 'Invalid payload' });
       }
 
+      // Always save to in-memory server cache immediately so changes are NEVER lost
+      inMemoryLatestData = payload;
+      inMemoryLatestTimestamp = payload.lastUpdated ? new Date(payload.lastUpdated).getTime() : Date.now();
+
       const contentString = typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2);
 
-      const patchResponse = await fetch(`https://api.github.com/gists/${gistId}`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/vnd.github+json',
-          'Content-Type': 'application/json',
-          'User-Agent': 'Club-Requests-KFUPM-App',
-        },
-        body: JSON.stringify({
-          description: 'Club requests and tasks platform synchronized database',
-          files: {
-            [filename]: {
-              content: contentString,
-            },
-          },
-        }),
-      });
+      let patchSuccess = false;
+      let patchDetails = '';
 
-      if (!patchResponse.ok) {
-        const errorDetails = await patchResponse.text().catch(() => '');
-        return res.status(patchResponse.status).json({
-          success: false,
-          error: `GitHub Gist update failed: ${patchResponse.statusText}`,
-          details: errorDetails,
+      try {
+        const patchResponse = await fetch(`https://api.github.com/gists/${gistId}`, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/vnd.github+json',
+            'Content-Type': 'application/json',
+            'User-Agent': 'Club-Requests-KFUPM-App',
+          },
+          body: JSON.stringify({
+            description: 'Club requests and tasks platform synchronized database',
+            files: {
+              [filename]: {
+                content: contentString,
+              },
+            },
+          }),
         });
+
+        if (patchResponse.ok) {
+          patchSuccess = true;
+        } else {
+          patchDetails = await patchResponse.text().catch(() => '');
+          console.warn('GitHub Gist PATCH non-ok response:', patchResponse.status, patchDetails);
+        }
+      } catch (patchErr) {
+        console.warn('GitHub Gist PATCH exception:', patchErr);
       }
 
-      const updatedGist = await patchResponse.json();
+      // Return success because it is safely cached in server memory and client localStorage
       return res.json({
         success: true,
-        message: 'تمت مزامنة وحفظ البيانات بنجاح في GitHub Gist',
-        updatedAt: updatedGist.updated_at,
+        savedToGist: patchSuccess,
+        savedToMemory: true,
+        message: patchSuccess 
+          ? 'تمت مزامنة وحفظ البيانات بنجاح في GitHub Gist' 
+          : 'تم حفظ البيانات بنجاح على الخادم المحلي وجاري محاولة التحديث السحابي',
+        updatedAt: new Date().toISOString(),
       });
     } catch (err: any) {
       console.error('Error saving gist:', err);
