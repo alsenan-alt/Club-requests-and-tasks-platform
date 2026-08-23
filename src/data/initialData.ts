@@ -387,7 +387,7 @@ export const AVAILABLE_SERVICES: ServiceItem[] = [
       { id: 'target_audience', label: 'الفئة المستهدفة', type: 'select', options: ['جميع طلاب الجامعة', 'طلاب كلية معينة', 'أعضاء النادي فقط', 'أعضاء هيئة التدريس والطلاب'], defaultValue: 'جميع طلاب الجامعة' },
       { id: 'announcement_title', label: 'عنوان الإعلان البارز', type: 'text', placeholder: 'انضموا إلينا في فعاليتنا المميزة...', required: true },
       { id: 'announcement_body', label: 'نص وتفاصيل الإعلان', type: 'textarea', placeholder: 'يسر نادي الحاسب دعوتكم لحضور ورشة عمل حول الذكاء الاصطناعي...', required: true },
-      { id: 'registration_link', label: 'رابط التسجيل أو الباركود (إن وجد)', type: 'text', placeholder: 'https://forms.gle/...' },
+      { id: 'registration_link', label: 'رابط التسجيل أو الباركود (إن وجد)', type: 'url', placeholder: 'https://forms.gle/...' },
       { id: 'broadcast_date', label: 'التاريخ المفضل لنشر الإعلان', type: 'date' },
     ],
   },

@@ -83,6 +83,7 @@ interface AppContextType {
   addTaskDetail: (taskId: string, label: string, value: any) => void;
   deleteTaskDetail: (taskId: string, keyOrLabel: string) => void;
   updateTaskDetail: (taskId: string, keyOrLabel: string, value: any) => void;
+  updateTaskExternalUrl: (taskId: string, externalUrl: string) => void;
   addGuestToTask: (taskId: string, guest: any) => void;
   removeGuestFromTask: (taskId: string, guestId: string) => void;
   deleteTask: (taskId: string) => { success: boolean; message: string };
@@ -969,6 +970,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addTaskDetail(taskId, keyOrLabel, value);
   };
 
+  // Staff & Admin: Update external landing page / website URL
+  const updateTaskExternalUrl = (taskId: string, externalUrl: string) => {
+    const timestamp = new Date().toISOString();
+    const cleanUrl = externalUrl.trim();
+
+    setRequests(prev => {
+      return prev.map(req => {
+        if (!req.tasks.some(t => t.id === taskId)) return req;
+
+        const updatedTasks = req.tasks.map(t => {
+          if (t.id !== taskId) return t;
+
+          const logComment = {
+            id: `comm-url-${Date.now()}`,
+            authorName: currentStaff?.shortName || (currentRole === 'admin' ? 'إدارة النشاط' : currentUser?.name || 'المستخدم'),
+            authorRole: currentRole,
+            message: cleanUrl 
+              ? `قام بإرفاق رابط موقع/صفحة خارجية للمهمة: (${cleanUrl})` 
+              : 'قام بإزالة رابط الصفحة الخارجية للمهمة',
+            timestamp,
+          };
+
+          return {
+            ...t,
+            externalUrl: cleanUrl || undefined,
+            comments: [...(t.comments || []), logComment],
+            updatedAt: timestamp,
+          };
+        });
+
+        return {
+          ...req,
+          tasks: updatedTasks,
+          updatedAt: timestamp,
+        };
+      });
+    });
+  };
+
   // Dynamic Security Guest Management
   const addGuestToTask = (taskId: string, guest: any) => {
     const timestamp = new Date().toISOString();
@@ -1272,6 +1312,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addTaskDetail,
         deleteTaskDetail,
         updateTaskDetail,
+        updateTaskExternalUrl,
         addGuestToTask,
         removeGuestFromTask,
         deleteTask,

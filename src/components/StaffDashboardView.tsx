@@ -26,7 +26,10 @@ import {
   ChevronDown,
   ChevronUp,
   FileText,
-  Trash2
+  Trash2,
+  Globe,
+  ExternalLink,
+  Link2
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { DEPARTMENTS } from '../data/initialData';
@@ -45,6 +48,7 @@ export const StaffDashboardView: React.FC<Props> = ({ staff, onOpenRequestDetail
     requests, 
     updateTaskStatus, 
     addTaskComment,
+    updateTaskExternalUrl,
     deleteTask,
     deleteRequest
   } = useApp();
@@ -53,6 +57,8 @@ export const StaffDashboardView: React.FC<Props> = ({ staff, onOpenRequestDetail
   const [selectedDeptFilter, setSelectedDeptFilter] = useState<string>('all');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('all');
   const [activeCommentTaskId, setActiveCommentTaskId] = useState<string | null>(null);
+  const [activeUrlTaskId, setActiveUrlTaskId] = useState<string | null>(null);
+  const [urlInputText, setUrlInputText] = useState('');
   const [commentText, setCommentText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [deletingTarget, setDeletingTarget] = useState<{ task: Task; request: ClubRequest } | null>(null);
@@ -92,6 +98,22 @@ export const StaffDashboardView: React.FC<Props> = ({ staff, onOpenRequestDetail
     addTaskComment(taskId, commentText);
     setCommentText('');
     setActiveCommentTaskId(null);
+  };
+
+  const handleOpenUrlInput = (taskId: string, currentUrl?: string) => {
+    if (activeUrlTaskId === taskId) {
+      setActiveUrlTaskId(null);
+    } else {
+      setActiveUrlTaskId(taskId);
+      setUrlInputText(currentUrl || '');
+      setActiveCommentTaskId(null);
+    }
+  };
+
+  const handleSaveUrl = (taskId: string) => {
+    updateTaskExternalUrl(taskId, urlInputText);
+    setActiveUrlTaskId(null);
+    setUrlInputText('');
   };
 
   const getServiceIcon = (deptId: string) => {
@@ -340,6 +362,7 @@ export const StaffDashboardView: React.FC<Props> = ({ staff, onOpenRequestDetail
           {filteredTasks.map(({ task, request }) => {
             const dept = DEPARTMENTS[task.departmentId];
             const isCommenting = activeCommentTaskId === task.id;
+            const isAddingUrl = activeUrlTaskId === task.id;
 
             return (
               <div
@@ -441,6 +464,71 @@ export const StaffDashboardView: React.FC<Props> = ({ staff, onOpenRequestDetail
                         </div>
                       )}
 
+                      {/* Add / Edit External URL Input Box */}
+                      {isAddingUrl && (
+                        <div className="mt-3 p-3.5 bg-blue-50/80 border border-blue-200 rounded-xl space-y-2.5 animate-in fade-in">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900">
+                              <Globe className="w-4 h-4 text-blue-600" />
+                              <span>إرفاق رابط خارجي / موقع إلكتروني للمشرف ورئيس النادي:</span>
+                            </div>
+                            {task.externalUrl && (
+                              <span className="text-[10px] text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-full font-bold">
+                                يوجد رابط حالي
+                              </span>
+                            )}
+                          </div>
+                          <div className="relative">
+                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
+                              <Link2 className="w-4 h-4 text-blue-500" />
+                            </div>
+                            <input
+                              type="url"
+                              value={urlInputText}
+                              onChange={e => setUrlInputText(e.target.value)}
+                              placeholder="https://drive.google.com/... أو https://example.com"
+                              dir="ltr"
+                              className="w-full text-xs p-2.5 pr-9 rounded-lg bg-white border border-blue-300 text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-mono text-left"
+                              autoFocus
+                            />
+                          </div>
+                          <div className="flex items-center justify-between gap-2 pt-1">
+                            {task.externalUrl ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  updateTaskExternalUrl(task.id, '');
+                                  setActiveUrlTaskId(null);
+                                  setUrlInputText('');
+                                }}
+                                className="text-xs font-semibold text-rose-600 hover:text-rose-800 hover:underline cursor-pointer flex items-center gap-1"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>إزالة الرابط المرفق</span>
+                              </button>
+                            ) : <div />}
+
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setActiveUrlTaskId(null)}
+                                className="px-3 py-1.5 text-xs font-semibold text-slate-500 hover:bg-slate-100 rounded-lg cursor-pointer"
+                              >
+                                إلغاء
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleSaveUrl(task.id)}
+                                className="px-4 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 active:scale-95 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-xs"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>حفظ الرابط</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                     </div>
                   </div>
 
@@ -498,6 +586,18 @@ export const StaffDashboardView: React.FC<Props> = ({ staff, onOpenRequestDetail
                           <span>اعتماد الإنجاز</span>
                         </button>
                       )}
+
+                      <button
+                        onClick={() => handleOpenUrlInput(task.id, task.externalUrl)}
+                        className={`p-1.5 rounded-xl transition-colors cursor-pointer border ${
+                          task.externalUrl
+                            ? 'text-blue-700 bg-blue-50 hover:bg-blue-100 border-blue-300 shadow-2xs'
+                            : 'text-slate-600 hover:text-blue-700 hover:bg-slate-100 border-slate-200'
+                        }`}
+                        title={task.externalUrl ? 'تعديل أو استعراض رابط الصفحة الخارجية' : 'إرفاق رابط خارجي / موقع للمهمة'}
+                      >
+                        <Globe className="w-4 h-4" />
+                      </button>
 
                       <button
                         onClick={() => setActiveCommentTaskId(isCommenting ? null : task.id)}

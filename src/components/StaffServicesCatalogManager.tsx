@@ -25,7 +25,9 @@ import {
   Camera, 
   ShieldCheck, 
   Utensils, 
-  Building2
+  Building2,
+  Globe,
+  ExternalLink
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { DEPARTMENTS } from '../data/initialData';
@@ -87,6 +89,7 @@ export const StaffServicesCatalogManager: React.FC<Props> = ({ staff }) => {
   const getFieldTypeLabel = (type: ServiceField['type']) => {
     switch (type) {
       case 'text': return 'نص عادي';
+      case 'url': return 'رابط / موقع إلكتروني (URL)';
       case 'number': return 'رقم / كمية';
       case 'select': return 'قائمة اختيار';
       case 'textarea': return 'نص طويل / وصف';
@@ -396,6 +399,7 @@ export const StaffServicesCatalogManager: React.FC<Props> = ({ staff }) => {
                             className="w-full p-2.5 rounded-xl border border-slate-300 font-semibold focus:ring-2 focus:ring-emerald-500 bg-white"
                           >
                             <option value="text">نص قصير (Text)</option>
+                            <option value="url">رابط خارجي / موقع إلكتروني (Link / URL)</option>
                             <option value="number">رقم أو عدد (Number)</option>
                             <option value="select">قائمة اختيار منسدلة (Select)</option>
                             <option value="textarea">نص طويل / وصف (Textarea)</option>

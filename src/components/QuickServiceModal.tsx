@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Send, Sparkles, AlertCircle } from 'lucide-react';
+import { X, Send, Sparkles, AlertCircle, Globe, ExternalLink } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { DEPARTMENTS, STAFF_MEMBERS, CLUBS_LIST } from '../data/initialData';
 import { SecurityGuestEntry } from '../types';
@@ -216,6 +216,29 @@ export const QuickServiceModal: React.FC<Props> = ({ isOpen, onClose, serviceId 
                         placeholder={field.placeholder}
                         className="w-full text-xs p-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500"
                       />
+                    </div>
+                  );
+                }
+
+                if (field.type === 'url') {
+                  return (
+                    <div key={field.id} className="sm:col-span-2">
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        {field.label} {field.required && <span className="text-rose-500">*</span>}
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
+                          <Globe className="w-4 h-4 text-blue-500" />
+                        </div>
+                        <input
+                          type="url"
+                          value={val}
+                          onChange={e => handleDetailChange(field.id, e.target.value)}
+                          placeholder={field.placeholder || 'https://...'}
+                          dir="ltr"
+                          className="w-full text-xs p-2 pr-9 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500 font-mono text-left"
+                        />
+                      </div>
                     </div>
                   );
                 }

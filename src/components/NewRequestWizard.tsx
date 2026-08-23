@@ -20,7 +20,9 @@ import {
   ShieldCheck, 
   Utensils, 
   Send,
-  AlertCircle
+  AlertCircle,
+  Globe,
+  ExternalLink
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { DEPARTMENTS, STAFF_MEMBERS, CLUBS_LIST } from '../data/initialData';
@@ -760,6 +762,29 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
                                 <label htmlFor={`chk-${srv.id}-${field.id}`} className="text-xs font-semibold text-slate-800 cursor-pointer">
                                   {field.label}
                                 </label>
+                              </div>
+                            );
+                          }
+
+                          if (field.type === 'url') {
+                            return (
+                              <div key={field.id} className="sm:col-span-2">
+                                <label className="block text-xs font-bold text-slate-700 mb-1">
+                                  {field.label} {field.required && <span className="text-rose-500">*</span>}
+                                </label>
+                                <div className="relative">
+                                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
+                                    <Globe className="w-4 h-4 text-blue-500" />
+                                  </div>
+                                  <input
+                                    type="url"
+                                    value={val}
+                                    onChange={e => handleFieldChange(srv.id, field.id, e.target.value)}
+                                    placeholder={field.placeholder || 'https://...'}
+                                    dir="ltr"
+                                    className="w-full text-xs p-2.5 pr-9 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500 font-mono text-left"
+                                  />
+                                </div>
                               </div>
                             );
                           }

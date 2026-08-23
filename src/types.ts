@@ -97,7 +97,7 @@ export interface SecurityGuestEntry {
 export interface ServiceField {
   id: string;
   label: string;
-  type: 'text' | 'number' | 'select' | 'textarea' | 'date' | 'time' | 'checkbox' | 'file';
+  type: 'text' | 'number' | 'select' | 'textarea' | 'date' | 'time' | 'checkbox' | 'file' | 'url';
   placeholder?: string;
   options?: string[];
   required?: boolean;
@@ -127,6 +127,7 @@ export interface Task {
   priority: 'normal' | 'high' | 'urgent';
   details: Record<string, any>;
   notes?: string;
+  externalUrl?: string;
   completionDate?: string;
   rejectionReason?: string;
   comments: TaskComment[];
