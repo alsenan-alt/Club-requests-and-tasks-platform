@@ -33,6 +33,7 @@ import { useApp } from '../context/AppContext';
 import { DEPARTMENTS } from '../data/initialData';
 import { StaffMember, ServiceItem, ServiceField } from '../types';
 import { EditServiceTitleModal } from './EditServiceTitleModal';
+import { CreateServiceModal } from './CreateServiceModal';
 
 interface Props {
   staff?: StaffMember;
@@ -44,11 +45,13 @@ export const StaffServicesCatalogManager: React.FC<Props> = ({ staff }) => {
     addServiceField, 
     updateServiceField, 
     deleteServiceField, 
+    deleteService,
     resetServiceToDefault,
     currentRole 
   } = useApp();
 
   const [expandedServiceId, setExpandedServiceId] = useState<string | null>(null);
+  const [isCreateServiceModalOpen, setIsCreateServiceModalOpen] = useState(false);
   const [addingFieldToServiceId, setAddingFieldToServiceId] = useState<string | null>(null);
   const [editingFieldInfo, setEditingFieldInfo] = useState<{ serviceId: string; field: ServiceField } | null>(null);
   const [editingServiceForTitle, setEditingServiceForTitle] = useState<ServiceItem | null>(null);
@@ -178,6 +181,17 @@ export const StaffServicesCatalogManager: React.FC<Props> = ({ staff }) => {
     }
   };
 
+  const handleDeleteService = (serviceId: string, serviceName: string) => {
+    if (window.confirm(`هل أنت متأكد من رغبتك في حذف خدمة (${serviceName}) بالكامل من قائمة ونماذج الخدمات؟`)) {
+      const res = deleteService(serviceId);
+      setAlertMessage(res.message);
+      if (expandedServiceId === serviceId) {
+        setExpandedServiceId(null);
+      }
+      setTimeout(() => setAlertMessage(null), 4000);
+    }
+  };
+
   return (
     <div className="bg-white rounded-3xl border-2 border-emerald-200/80 shadow-md p-6 sm:p-7 space-y-6">
       
@@ -200,14 +214,27 @@ export const StaffServicesCatalogManager: React.FC<Props> = ({ staff }) => {
               تهيئة وتخصيص تفاصيل الخدمات لنماذج طلبات الأندية
             </h3>
             <p className="text-xs text-slate-600 mt-1 leading-relaxed max-w-2xl">
-              يمكنك هنا استعراض جميع الخدمات الموكلة لك، وإضافة أو تعديل أو حذف أي متطلب أو تفصيل تريده أن يظهر لرؤساء الأندية عند تقديمهم طلب فعالية جديدة.
+              يمكنك هنا استعراض جميع الخدمات الموكلة لك، وإضافة خدمات جديدة أو تعديل وحذف أي متطلب أو تفصيل تريده أن يظهر لرؤساء الأندية عند تقديمهم طلب فعالية.
             </p>
           </div>
         </div>
 
-        <div className="shrink-0 flex items-center gap-2 bg-emerald-50/80 border border-emerald-200 px-4 py-2.5 rounded-2xl text-xs text-emerald-900 font-semibold">
-          <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span>تنعكس التعديلات فوراً على نماذج الطلاب</span>
+        <div className="shrink-0 flex items-center gap-2.5 flex-wrap">
+          <button
+            type="button"
+            id="btn-add-new-service-catalog"
+            onClick={() => setIsCreateServiceModalOpen(true)}
+            className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 active:scale-95 text-white text-xs sm:text-sm font-bold rounded-2xl flex items-center gap-2 shadow-md shadow-emerald-900/15 transition-all cursor-pointer"
+            title="إضافة وتخصيص نموذج خدمة جديدة"
+          >
+            <Plus className="w-4 h-4" />
+            <span>+ خدمة جديدة</span>
+          </button>
+
+          <div className="hidden xl:flex items-center gap-2 bg-emerald-50/80 border border-emerald-200 px-3.5 py-2.5 rounded-2xl text-xs text-emerald-900 font-semibold">
+            <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>تنعكس التعديلات فوراً على الطلاب</span>
+          </div>
         </div>
       </div>
 
@@ -229,95 +256,131 @@ export const StaffServicesCatalogManager: React.FC<Props> = ({ staff }) => {
       )}
 
       {/* Assigned Services List */}
-      <div className="space-y-4">
-        {assignedServices.map(srv => {
-          const dept = DEPARTMENTS[srv.departmentId];
-          const isExpanded = expandedServiceId === srv.id || assignedServices.length === 1;
-          const isAddingToThis = addingFieldToServiceId === srv.id;
-          const isEditingThisService = editingFieldInfo?.serviceId === srv.id;
+      {assignedServices.length === 0 ? (
+        <div className="p-8 sm:p-12 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-300 space-y-4">
+          <div className="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto shadow-xs">
+            <Layers className="w-7 h-7" />
+          </div>
+          <div className="space-y-1">
+            <h4 className="text-base font-bold text-slate-800 font-['Tajawal',sans-serif]">
+              لا توجد خدمات مسجلة تحت إشرافك حالياً
+            </h4>
+            <p className="text-xs text-slate-500 max-w-md mx-auto">
+              يمكنك إضافة أول خدمة الآن وتحديد الحقول والتفاصيل التي ترغب في أن يملأها الطلاب عند طلبها.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsCreateServiceModalOpen(true)}
+            className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-bold inline-flex items-center gap-2 shadow-md cursor-pointer transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            <span>إنشاء أول خدمة جديدة</span>
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {assignedServices.map(srv => {
+            const dept = DEPARTMENTS[srv.departmentId];
+            const isExpanded = expandedServiceId === srv.id || assignedServices.length === 1;
+            const isAddingToThis = addingFieldToServiceId === srv.id;
+            const isEditingThisService = editingFieldInfo?.serviceId === srv.id;
 
-          return (
-            <div 
-              key={srv.id}
-              className={`rounded-2xl border transition-all ${
-                isExpanded 
-                  ? 'border-emerald-400 bg-slate-50/40 shadow-sm' 
-                  : 'border-slate-200 bg-white hover:border-slate-300'
-              }`}
-            >
-              {/* Service Header Row */}
+            return (
               <div 
-                onClick={() => setExpandedServiceId(isExpanded ? null : srv.id)}
-                className="p-4 sm:p-5 flex items-center justify-between gap-4 cursor-pointer select-none"
+                key={srv.id}
+                id={`catalog-service-card-${srv.id}`}
+                className={`rounded-2xl border transition-all ${
+                  isExpanded 
+                    ? 'border-emerald-400 bg-slate-50/40 shadow-sm' 
+                    : 'border-slate-200 bg-white hover:border-slate-300'
+                }`}
               >
-                <div className="flex items-center gap-3.5 flex-1 min-w-0">
-                  <div className={`w-11 h-11 rounded-xl bg-white border border-slate-200 shadow-2xs flex items-center justify-center text-emerald-700 shrink-0`}>
-                    {getServiceIcon(srv.iconName)}
-                  </div>
-
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h4 className="text-sm sm:text-base font-bold text-slate-900 truncate">
-                        {srv.name}
-                      </h4>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditingServiceForTitle(srv);
-                        }}
-                        className="p-1 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
-                        title="تعديل عنوان ومسمى الخدمة وأيقونتها"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </button>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${dept?.badgeBg || 'bg-slate-100 text-slate-700'}`}>
-                        {dept?.name}
-                      </span>
-                      <span className="text-[11px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-md">
-                        {srv.fields.length} تفاصيل/حقول مهيأة
-                      </span>
+                {/* Service Header Row */}
+                <div 
+                  onClick={() => setExpandedServiceId(isExpanded ? null : srv.id)}
+                  className="p-4 sm:p-5 flex items-center justify-between gap-4 cursor-pointer select-none"
+                >
+                  <div className="flex items-center gap-3.5 flex-1 min-w-0">
+                    <div className={`w-11 h-11 rounded-xl bg-white border border-slate-200 shadow-2xs flex items-center justify-center text-emerald-700 shrink-0`}>
+                      {getServiceIcon(srv.iconName)}
                     </div>
-                    <p className="text-xs text-slate-500 mt-1 truncate">
-                      {srv.description}
-                    </p>
+
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="text-sm sm:text-base font-bold text-slate-900 truncate">
+                          {srv.name}
+                        </h4>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingServiceForTitle(srv);
+                          }}
+                          className="p-1 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                          title="تعديل عنوان ومسمى الخدمة وأيقونتها"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${dept?.badgeBg || 'bg-slate-100 text-slate-700'}`}>
+                          {dept?.name}
+                        </span>
+                        <span className="text-[11px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-md">
+                          {srv.fields.length} تفاصيل/حقول مهيأة
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-1 truncate">
+                        {srv.description}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingServiceForTitle(srv);
+                      }}
+                      className="hidden sm:flex px-2.5 py-1.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 text-xs font-bold rounded-xl items-center gap-1 border border-slate-200 transition-all cursor-pointer"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                      <span>تعديل العنوان</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExpandedServiceId(srv.id);
+                        handleOpenAddField(srv.id);
+                      }}
+                      className="hidden sm:flex px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl items-center gap-1 shadow-xs transition-all cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>إضافة تفصيل جديد</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteService(srv.id, srv.name);
+                      }}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+                      title="حذف هذه الخدمة من النماذج"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+
+                    <div className="p-2 text-slate-400 hover:text-slate-600 transition-colors">
+                      {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEditingServiceForTitle(srv);
-                    }}
-                    className="hidden sm:flex px-2.5 py-1.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 text-xs font-bold rounded-xl items-center gap-1 border border-slate-200 transition-all cursor-pointer"
-                  >
-                    <Edit3 className="w-3.5 h-3.5" />
-                    <span>تعديل العنوان</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setExpandedServiceId(srv.id);
-                      handleOpenAddField(srv.id);
-                    }}
-                    className="hidden sm:flex px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl items-center gap-1 shadow-xs transition-all cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>إضافة تفصيل جديد</span>
-                  </button>
-
-                  <div className="p-2 text-slate-400 hover:text-slate-600 transition-colors">
-                    {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                  </div>
-                </div>
-              </div>
-
-              {/* Service Expanded Fields & Configuration Section */}
-              {isExpanded && (
+                {/* Service Expanded Fields & Configuration Section */}
+                {isExpanded && (
                 <div className="p-4 sm:p-5 pt-0 border-t border-slate-200/80 mt-1 space-y-4 animate-in fade-in">
                   
                   {/* Action Bar inside Expanded Service */}
@@ -568,12 +631,24 @@ export const StaffServicesCatalogManager: React.FC<Props> = ({ staff }) => {
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
 
       <EditServiceTitleModal
         isOpen={Boolean(editingServiceForTitle)}
         service={editingServiceForTitle}
         onClose={() => setEditingServiceForTitle(null)}
+      />
+
+      <CreateServiceModal
+        isOpen={isCreateServiceModalOpen}
+        staff={staff}
+        onClose={() => setIsCreateServiceModalOpen(false)}
+        onServiceCreated={(newService) => {
+          setExpandedServiceId(newService.id);
+          setAlertMessage(`تم إنشاء وإدراج خدمة (${newService.name}) بنجاح! يمكنك الآن استعراضها وتخصيص حقولها.`);
+          setTimeout(() => setAlertMessage(null), 5000);
+        }}
       />
 
     </div>

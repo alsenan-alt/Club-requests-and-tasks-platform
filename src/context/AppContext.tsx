@@ -10,7 +10,8 @@ import {
   RequestStatus,
   UserAccount,
   ServiceItem,
-  ServiceField
+  ServiceField,
+  DepartmentId
 } from '../types';
 import { 
   STAFF_MEMBERS, 
@@ -94,7 +95,8 @@ interface AppContextType {
   updateServiceField: (serviceId: string, fieldId: string, updatedField: Partial<ServiceField>) => { success: boolean; message: string };
   deleteServiceField: (serviceId: string, fieldId: string) => { success: boolean; message: string };
   resetServiceToDefault: (serviceId?: string) => void;
-  addNewCustomService: (serviceData: { name: string; departmentId: any; description: string; iconName?: string; fields?: ServiceField[] }) => ServiceItem;
+  addNewCustomService: (serviceData: { name: string; departmentId: DepartmentId; description: string; iconName?: string; staffId?: string; restrictedToVip?: boolean; fields?: ServiceField[] }) => { success: boolean; service: ServiceItem; message: string };
+  deleteService: (serviceId: string) => { success: boolean; message: string };
   selectedRequestId: string | null;
   setSelectedRequestId: (id: string | null) => void;
   isNewRequestModalOpen: boolean;
@@ -1257,21 +1259,58 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const addNewCustomService = (serviceData: { name: string; departmentId: any; description: string; iconName?: string; fields?: any[] }) => {
+  const addNewCustomService = (serviceData: { 
+    name: string; 
+    departmentId: DepartmentId; 
+    description: string; 
+    iconName?: string; 
+    staffId?: string;
+    restrictedToVip?: boolean;
+    fields?: ServiceField[]; 
+  }): { success: boolean; service: ServiceItem; message: string } => {
+    const assignedStaffId = serviceData.staffId || DEPARTMENTS[serviceData.departmentId]?.staffId || currentStaff?.id || 'hussein_ramadan';
     const newService: ServiceItem = {
-      id: `srv_custom_${Date.now()}`,
-      name: serviceData.name,
+      id: `srv_custom_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      name: serviceData.name.trim(),
       departmentId: serviceData.departmentId,
-      staffId: DEPARTMENTS[serviceData.departmentId]?.staffId || 'hussein_ramadan',
+      staffId: assignedStaffId,
       iconName: serviceData.iconName || 'Sparkles',
-      description: serviceData.description,
-      fields: serviceData.fields || [
-        { id: 'custom_notes', label: 'مواصفات وتفاصيل الطلب', type: 'textarea', placeholder: 'اكتب ما تحتاجه بدقة...', required: true }
-      ],
+      description: serviceData.description.trim() || 'خدمة مخصصة جديدة مضافة من قبل المشرف',
+      restrictedToVip: Boolean(serviceData.restrictedToVip),
+      fields: serviceData.fields && serviceData.fields.length > 0 
+        ? serviceData.fields 
+        : [
+          { 
+            id: `field_desc_${Date.now()}`, 
+            label: 'مواصفات وتفاصيل الخدمة المطلوبة', 
+            type: 'textarea', 
+            placeholder: 'اكتب مواصفات وتفاصيل طلبك هنا بدقة...', 
+            required: true 
+          }
+        ],
     };
 
     setServices(prev => [...prev, newService]);
-    return newService;
+    return {
+      success: true,
+      service: newService,
+      message: `تم إنشاء وإدراج خدمة (${newService.name}) في دليل نماذج الخدمات بنجاح!`
+    };
+  };
+
+  const deleteService = (serviceId: string): { success: boolean; message: string } => {
+    let deletedServiceName = '';
+    const targetService = services.find(s => s.id === serviceId);
+    if (targetService) {
+      deletedServiceName = targetService.name;
+    }
+
+    setServices(prev => prev.filter(s => s.id !== serviceId));
+
+    return {
+      success: true,
+      message: `تم حذف خدمة (${deletedServiceName || serviceId}) من دليل الخدمات بنجاح.`
+    };
   };
 
   const resetToSampleData = () => {
@@ -1324,6 +1363,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteServiceField,
         resetServiceToDefault,
         addNewCustomService,
+        deleteService,
         selectedRequestId,
         setSelectedRequestId,
         isNewRequestModalOpen,
