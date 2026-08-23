@@ -1,19 +1,51 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, ShieldCheck, Car, User, CreditCard, Users, Sparkles, Check, AlertCircle, Hash, Palette } from 'lucide-react';
+import { 
+  Plus, 
+  Trash2, 
+  ShieldCheck, 
+  Car, 
+  User, 
+  CreditCard, 
+  Users, 
+  Sparkles, 
+  Check, 
+  AlertCircle, 
+  Hash, 
+  Palette, 
+  Printer, 
+  FileText,
+  BadgeCheck
+} from 'lucide-react';
 import { SecurityGuestEntry } from '../types';
+import { SecurityPermitsPrintModal } from './SecurityPermitsPrintModal';
 
 interface Props {
   guests: SecurityGuestEntry[];
-  onChange: (updatedGuests: SecurityGuestEntry[]) => void;
+  onChange?: (updatedGuests: SecurityGuestEntry[]) => void;
   readOnly?: boolean;
+  eventTitle?: string;
+  clubName?: string;
+  eventDate?: string;
+  eventTime?: string;
+  location?: string;
+  requestId?: string;
+  supervisorName?: string;
 }
 
 export const SecurityGuestListManager: React.FC<Props> = ({
   guests = [],
   onChange,
-  readOnly = false
+  readOnly = false,
+  eventTitle,
+  clubName,
+  eventDate,
+  eventTime,
+  location,
+  requestId,
+  supervisorName
 }) => {
   const [isAdding, setIsAdding] = useState(false);
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
   // New Guest Form State
   const [name, setName] = useState('');
@@ -67,13 +99,17 @@ export const SecurityGuestListManager: React.FC<Props> = ({
     };
 
     const updated = [...guests, newGuest];
-    onChange(updated);
+    if (onChange) {
+      onChange(updated);
+    }
     resetForm();
   };
 
   const handleRemoveGuest = (guestId: string) => {
     const updated = guests.filter(g => g.id !== guestId);
-    onChange(updated);
+    if (onChange) {
+      onChange(updated);
+    }
   };
 
   // Plate input sanitization (English characters, digits, and spaces only)
@@ -105,7 +141,7 @@ export const SecurityGuestListManager: React.FC<Props> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white text-orange-900 border border-orange-200 text-xs font-bold shadow-2xs">
             <Car className="w-3.5 h-3.5 text-orange-600" />
             <span>{guests.length} سيارة / ضيف</span>
@@ -113,6 +149,19 @@ export const SecurityGuestListManager: React.FC<Props> = ({
             <Users className="w-3.5 h-3.5 text-amber-600" />
             <span>{totalPeople} إجمالي الأشخاص</span>
           </div>
+
+          {/* Print Permits Button */}
+          {guests.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setIsPrintModalOpen(true)}
+              className="px-3.5 py-1.5 bg-white hover:bg-orange-100/70 active:scale-95 text-orange-950 border border-orange-300 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all shadow-xs cursor-pointer hover:border-orange-400"
+              title="طباعة قائمة وتصاريح دخول الضيوف والمركبات"
+            >
+              <Printer className="w-3.5 h-3.5 text-orange-600" />
+              <span>طباعة التصاريح والبيان</span>
+            </button>
+          )}
 
           {!readOnly && (
             <button
@@ -367,23 +416,47 @@ export const SecurityGuestListManager: React.FC<Props> = ({
                 </div>
               </div>
 
-              {/* Remove button if not read-only */}
-              {!readOnly && (
-                <div className="mt-2.5 pt-2 border-t border-slate-100 flex justify-end">
+              {/* Actions on Card */}
+              <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setIsPrintModalOpen(true)}
+                  className="text-[11px] text-orange-700 hover:text-orange-900 hover:bg-orange-50 px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 cursor-pointer font-bold"
+                  title="معاينة وطباعة تصريح هذا الضيف أو كافة الضيوف"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>طباعة التصريح</span>
+                </button>
+
+                {!readOnly && (
                   <button
                     type="button"
                     onClick={() => handleRemoveGuest(guest.id)}
                     className="text-[11px] text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 cursor-pointer font-bold"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
-                    <span>حذف من القائمة</span>
+                    <span>حذف</span>
                   </button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           ))}
         </div>
       )}
+
+      {/* Security Permits Print & Export Modal */}
+      <SecurityPermitsPrintModal
+        isOpen={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        guests={guests}
+        eventTitle={eventTitle}
+        clubName={clubName}
+        eventDate={eventDate}
+        eventTime={eventTime}
+        location={location}
+        requestId={requestId}
+        supervisorName={supervisorName}
+      />
 
     </div>
   );

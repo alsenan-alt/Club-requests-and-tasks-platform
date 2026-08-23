@@ -170,6 +170,9 @@ export const QuickServiceModal: React.FC<Props> = ({ isOpen, onClose, serviceId 
               <div className="mb-4">
                 <SecurityGuestListManager
                   guests={(formDetails.guestsList as SecurityGuestEntry[]) || []}
+                  eventTitle={eventTitle || `فعالية ${service.name}`}
+                  clubName={(currentRole === 'club_president' && currentUser?.clubName) ? currentUser.clubName : clubName}
+                  eventDate={eventDate}
                   onChange={(newGuests) => {
                     handleDetailChange('guestsList', newGuests);
                     handleDetailChange('visitor_count', newGuests.length);

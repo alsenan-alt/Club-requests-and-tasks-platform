@@ -206,6 +206,13 @@ export const RequestDetailsModal: React.FC<Props> = ({ requestId, onClose }) => 
                         {/* Task Form Parameters & Details Viewer */}
                         <TaskRequirementsViewer 
                           task={task} 
+                          requestTitle={request.eventTitle}
+                          clubName={request.clubName}
+                          eventDate={request.eventDate}
+                          eventTime={`${request.startTime} - ${request.endTime}`}
+                          location={request.locationSummary || request.location}
+                          requestId={request.requestNumber}
+                          supervisorName={task.staffName}
                         />
 
                         {/* Action buttons if current user is assignee or admin */}

@@ -417,6 +417,13 @@ export const StaffDashboardView: React.FC<Props> = ({ staff, onOpenRequestDetail
                       <div className="mt-4">
                         <TaskRequirementsViewer 
                           task={task} 
+                          requestTitle={request.eventTitle}
+                          clubName={request.clubName}
+                          eventDate={request.eventDate}
+                          eventTime={`${request.startTime} - ${request.endTime}`}
+                          location={request.locationSummary || request.location}
+                          requestId={request.requestNumber}
+                          supervisorName={task.staffName}
                         />
                       </div>
 

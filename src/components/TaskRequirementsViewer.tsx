@@ -5,6 +5,13 @@ import { SecurityGuestListManager } from './SecurityGuestListManager';
 
 interface Props {
   task: Task;
+  requestTitle?: string;
+  clubName?: string;
+  eventDate?: string;
+  eventTime?: string;
+  location?: string;
+  requestId?: string;
+  supervisorName?: string;
 }
 
 const FIELD_LABELS: Record<string, string> = {
@@ -68,7 +75,16 @@ const formatUrl = (val: string): string => {
   return `https://${trimmed}`;
 };
 
-export const TaskRequirementsViewer: React.FC<Props> = ({ task }) => {
+export const TaskRequirementsViewer: React.FC<Props> = ({ 
+  task,
+  requestTitle,
+  clubName,
+  eventDate,
+  eventTime,
+  location,
+  requestId,
+  supervisorName
+}) => {
   const details = task.details || {};
   const hasGuests = Array.isArray(details.guestsList) && details.guestsList.length > 0;
   const standardEntries = Object.entries(details).filter(([k, v]) => k !== 'guestsList' && v !== undefined && v !== '');
@@ -109,6 +125,13 @@ export const TaskRequirementsViewer: React.FC<Props> = ({ task }) => {
           <SecurityGuestListManager
             guests={details.guestsList as SecurityGuestEntry[]}
             readOnly={true}
+            eventTitle={requestTitle}
+            clubName={clubName}
+            eventDate={eventDate}
+            eventTime={eventTime}
+            location={location}
+            requestId={requestId}
+            supervisorName={supervisorName || task.staffName}
           />
         </div>
       )}

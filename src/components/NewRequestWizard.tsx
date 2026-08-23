@@ -699,6 +699,11 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
                         <div className="mb-4">
                           <SecurityGuestListManager
                             guests={(currentData.details?.guestsList as SecurityGuestEntry[]) || []}
+                            eventTitle={formData.eventTitle}
+                            clubName={formData.clubName}
+                            eventDate={formData.eventDate}
+                            eventTime={`${formData.startTime} - ${formData.endTime}`}
+                            location={formData.locationSummary || formData.location}
                             onChange={(newGuests) => {
                               handleFieldChange(srv.id, 'guestsList', newGuests);
                               handleFieldChange(srv.id, 'visitor_count', newGuests.length);

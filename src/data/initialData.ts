@@ -619,8 +619,54 @@ export const INITIAL_REQUESTS: ClubRequest[] = [
         priority: 'high',
         details: {
           security_type: 'تصاريح دخول ضيوف وسيارات عبر بوابات الجامعة',
-          visitor_count: 8,
+          visitor_count: 4,
           visitor_details: 'مرفق قائمة المحكمين من شركات التقنية (أرامكو، تحكم، سدايا) مع أرقام الهويات واللوحات.',
+          guestsList: [
+            {
+              id: 'gst-101',
+              name: 'د. محمد عبدالله القحطاني (كبير مهندسي الذكاء الاصطناعي - أرامكو)',
+              nationalId: '1084920194',
+              plateNumber: '7821 KSA',
+              carType: 'لكزس ES350',
+              carModel: '2024',
+              carColor: 'أبيض لؤلؤي',
+              ownerName: 'د. محمد القحطاني',
+              companionsCount: 1
+            },
+            {
+              id: 'gst-102',
+              name: 'م. سارة إبراهيم الدوسري (مديرة الابتكار - سدايا)',
+              nationalId: '1092837461',
+              plateNumber: '5544 SDA',
+              carType: 'تويوتا برادو',
+              carModel: '2023',
+              carColor: 'فضي معدني',
+              ownerName: 'سارة الدوسري',
+              companionsCount: 0
+            },
+            {
+              id: 'gst-103',
+              name: 'أ. فهد منصور الشمري (مستشار تقني - شركة تحكم)',
+              nationalId: '1074829103',
+              plateNumber: '9012 THK',
+              carType: 'شفروليه تاهو',
+              carModel: '2024',
+              carColor: 'أسود ملكي',
+              ownerName: 'فهد الشمري',
+              companionsCount: 2
+            },
+            {
+              id: 'gst-104',
+              name: 'د. يوسف عبدالرحمن العتيبي (أستاذ مشارك زائر - جامعة كينغستون)',
+              nationalId: '2083746192',
+              plateNumber: '3410 ABD',
+              carType: 'هيونداي جينيسيس GV80',
+              carModel: '2023',
+              carColor: 'كحلي داكن',
+              ownerName: 'د. يوسف العتيبي',
+              companionsCount: 1
+            }
+          ]
         },
         completionDate: '2026-08-17T10:30:00Z',
         comments: [
