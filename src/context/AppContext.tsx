@@ -144,7 +144,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [services, setServices] = useState<ServiceItem[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.SERVICES);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed: ServiceItem[] = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Ensure all default services exist (including srv_catering_vip)
+          const existingIds = new Set(parsed.map(s => s.id));
+          const missingDefaults = AVAILABLE_SERVICES.filter(s => !existingIds.has(s.id));
+          const merged = parsed.map(s => {
+            if (s.id === 'srv_catering_vip') {
+              return { ...s, restrictedToVip: false };
+            }
+            return s;
+          });
+          return [...merged, ...missingDefaults];
+        }
+      }
     } catch (e) {
       console.error(e);
     }
@@ -225,8 +239,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(cloudData.userAccounts));
         }
         if (Array.isArray(cloudData.services) && cloudData.services.length > 0) {
-          setServices(cloudData.services);
-          localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(cloudData.services));
+          const existingIds = new Set(cloudData.services.map(s => s.id));
+          const missingDefaults = AVAILABLE_SERVICES.filter(s => !existingIds.has(s.id));
+          const normalized = cloudData.services.map(s => {
+            if (s.id === 'srv_catering_vip') {
+              return { ...s, restrictedToVip: false };
+            }
+            return s;
+          });
+          const mergedServices = [...normalized, ...missingDefaults];
+          setServices(mergedServices);
+          localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(mergedServices));
         }
         if (Array.isArray(cloudData.notifications) && cloudData.notifications.length > 0) {
           setNotifications(cloudData.notifications);

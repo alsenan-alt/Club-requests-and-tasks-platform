@@ -220,7 +220,7 @@ export const ClubPresidentView: React.FC<Props> = ({
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          {services.filter(s => !s.restrictedToVip).map(srv => {
+          {services.map(srv => {
             const staff = STAFF_MEMBERS.find(sm => sm.id === srv.staffId);
             const dept = DEPARTMENTS[srv.departmentId];
 

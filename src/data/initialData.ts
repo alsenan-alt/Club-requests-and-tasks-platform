@@ -437,17 +437,17 @@ export const AVAILABLE_SERVICES: ServiceItem[] = [
   },
   {
     id: 'srv_catering_vip',
-    name: 'الخدمات الغذائية والضيافة الخاصة',
+    name: 'الخدمات الغذائية والضيافة',
     departmentId: 'catering',
     staffId: 'musleh_alshamrani',
     iconName: 'Utensils',
-    description: 'توفير الضيافة ووجبات العشاء للفعاليات الخاصة أو لإدارة النشاط فقط (ملاحظة: لا تُشارك مع الطلاب)',
-    restrictedToVip: true,
+    description: 'توفير خدمات الضيافة، وجبات البوفيه، المشروبات، المأكولات الخفيفة وتجهيزات الضيافة للفعاليات والأنشطة',
+    restrictedToVip: false,
     fields: [
-      { id: 'catering_type', label: 'نوع الضيافة المطلوبة', type: 'select', options: ['ضيافة قهوة وشاي وتمور VIP', 'وجبات عشاء بوفيه رسمي', 'وجبات خفيفة وساندوتشات مغلفة', 'باقة ضيافة متكاملة لكبار الشخصيات'], defaultValue: 'ضيافة قهوة وشاي وتمور VIP' },
+      { id: 'catering_type', label: 'نوع الضيافة المطلوبة', type: 'select', options: ['ضيافة قهوة وشاي وتمور VIP', 'وجبات عشاء بوفيه رسمي', 'وجبات خفيفة وساندوتشات مغلفة', 'باقة ضيافة متكاملة لكبار الشخصيات', 'مشروبات ومياه ومأكولات خفيفة'], defaultValue: 'ضيافة قهوة وشاي وتمور VIP' },
       { id: 'guest_count', label: 'عدد المستفيدين من الضيافة', type: 'number', defaultValue: 20, unit: 'شخص' },
-      { id: 'admin_approval_note', label: 'جهة الفعالية أو اعتماد إدارة النشاط', type: 'text', placeholder: 'فعالية خاصة معتمدة من مدير إدارة النشاط الطلابي', required: true },
-      { id: 'dietary_notes', label: 'ملاحظات خاصة بالتغذية والتوقيت', type: 'textarea', placeholder: 'تقديم الضيافة في تمام الساعة 7:30 مساءً في قاعة كبار الشخصيات' },
+      { id: 'admin_approval_note', label: 'ملاحظات الضيافة وموقع التقديم', type: 'text', placeholder: 'مثال: تقديم الضيافة عند مدخل القاعة في تمام الساعة 7:00 مساءً', required: false },
+      { id: 'dietary_notes', label: 'ملاحظات خاصة بالتغذية والتوقيت', type: 'textarea', placeholder: 'أي اشتراطات خاصة بالأغذية أو التوقيت المحدد...' },
     ],
   },
 ];
