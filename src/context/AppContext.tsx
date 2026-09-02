@@ -271,11 +271,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     markLocalDataModified();
   };
 
-  // Accounts State (including custom registered clubs)
+  // Accounts State (including custom registered clubs & supervisors)
   const [userAccounts, setUserAccounts] = useState<UserAccount[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed: UserAccount[] = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const parsedIds = new Set(parsed.map(u => u.id));
+          // Missing defaults (especially supervisors and clubs from USER_ACCOUNTS)
+          const missingDefaults = USER_ACCOUNTS.filter(u => !parsedIds.has(u.id));
+          // Also ensure any existing account in USER_ACCOUNTS is merged with full metadata if old structure had missing fields
+          const updatedParsed = parsed.map(u => {
+            const defaultAcc = USER_ACCOUNTS.find(d => d.id === u.id);
+            if (defaultAcc) {
+              return {
+                ...defaultAcc,
+                ...u,
+                supervisedClubNames: u.supervisedClubNames || defaultAcc.supervisedClubNames,
+                supervisorId: u.supervisorId || defaultAcc.supervisorId,
+                supervisorName: u.supervisorName || defaultAcc.supervisorName,
+              };
+            }
+            return u;
+          });
+          return [...updatedParsed, ...missingDefaults];
+        }
+      }
     } catch (e) {
       console.error(e);
     }
