@@ -55,7 +55,8 @@ export const ClubPresidentView: React.FC<Props> = ({
     setSelectedRequestId,
     services,
     deleteTask,
-    deleteRequest
+    deleteRequest,
+    staffMembers
   } = useApp();
 
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -221,7 +222,7 @@ export const ClubPresidentView: React.FC<Props> = ({
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {services.map(srv => {
-            const staff = STAFF_MEMBERS.find(sm => sm.id === srv.staffId);
+            const staff = staffMembers.find(sm => sm.id === srv.staffId) || STAFF_MEMBERS.find(sm => sm.id === srv.staffId);
             const dept = DEPARTMENTS[srv.departmentId];
 
             return (
@@ -439,7 +440,7 @@ export const ClubPresidentView: React.FC<Props> = ({
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {req.tasks.map(task => {
-                          const staff = STAFF_MEMBERS.find(s => s.id === task.staffId);
+                          const staff = staffMembers.find(s => s.id === task.staffId) || STAFF_MEMBERS.find(s => s.id === task.staffId);
                           const dept = DEPARTMENTS[task.departmentId];
 
                           return (

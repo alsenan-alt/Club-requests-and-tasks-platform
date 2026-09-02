@@ -43,15 +43,19 @@ interface Props {
   onOpenRequestDetails: (requestId: string) => void;
 }
 
-export const StaffDashboardView: React.FC<Props> = ({ staff, onOpenRequestDetails }) => {
+export const StaffDashboardView: React.FC<Props> = ({ staff: propStaff, onOpenRequestDetails }) => {
   const { 
     requests, 
     updateTaskStatus, 
     addTaskComment,
     updateTaskExternalUrl,
     deleteTask,
-    deleteRequest
+    deleteRequest,
+    currentStaff,
+    userAccounts
   } = useApp();
+
+  const staff = currentStaff || propStaff;
 
   const [activeMainTab, setActiveMainTab] = useState<'all_view' | 'services_config' | 'tasks_board'>('all_view');
   const [selectedDeptFilter, setSelectedDeptFilter] = useState<string>('all');
@@ -409,7 +413,12 @@ export const StaffDashboardView: React.FC<Props> = ({ staff, onOpenRequestDetail
                         </span>
                         <span className="flex items-center gap-1 text-slate-500">
                           <User className="w-3.5 h-3.5 text-slate-400" />
-                          المسؤول: {request.presidentName} ({request.presidentPhone})
+                          المسؤول: {(() => {
+                            const clubAcc = userAccounts.find(u => u.clubName === request.clubName);
+                            const name = request.presidentName || clubAcc?.name || 'المسؤول';
+                            const phone = request.presidentPhone || clubAcc?.phone || '';
+                            return phone ? `${name} (${phone})` : name;
+                          })()}
                         </span>
                       </div>
 

@@ -61,7 +61,7 @@ export const CreateServiceModal: React.FC<Props> = ({
   staff, 
   onServiceCreated 
 }) => {
-  const { addNewCustomService, currentRole, currentStaff } = useApp();
+  const { addNewCustomService, currentRole, currentStaff, staffMembers } = useApp();
 
   // Determine allowed departments
   const availableDepartmentIds: DepartmentId[] = (
@@ -163,7 +163,7 @@ export const CreateServiceModal: React.FC<Props> = ({
 
   const SelectedIconComp = AVAILABLE_ICONS.find(i => i.name === iconName)?.icon || Sparkles;
   const currentDeptInfo = DEPARTMENTS[departmentId];
-  const assignedStaff = STAFF_MEMBERS.find(s => s.id === (staff?.id || currentDeptInfo?.staffId));
+  const assignedStaff = staffMembers.find(s => s.id === (staff?.id || currentDeptInfo?.staffId)) || STAFF_MEMBERS.find(s => s.id === (staff?.id || currentDeptInfo?.staffId));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200">

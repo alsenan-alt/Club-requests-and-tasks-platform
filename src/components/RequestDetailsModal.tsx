@@ -38,7 +38,9 @@ export const RequestDetailsModal: React.FC<Props> = ({ requestId, onClose }) => 
     updateTaskStatus, 
     addTaskComment,
     deleteTask,
-    deleteRequest
+    deleteRequest,
+    staffMembers,
+    userAccounts
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'print_form'>('overview');
@@ -149,7 +151,7 @@ export const RequestDetailsModal: React.FC<Props> = ({ requestId, onClose }) => 
 
                 <div className="space-y-3">
                   {request.tasks.map(task => {
-                    const staff = STAFF_MEMBERS.find(s => s.id === task.staffId);
+                    const staff = staffMembers.find(s => s.id === task.staffId) || STAFF_MEMBERS.find(s => s.id === task.staffId);
                     const dept = DEPARTMENTS[task.departmentId];
                     const isAssignee = currentStaff?.id === task.staffId;
 
@@ -308,7 +310,14 @@ export const RequestDetailsModal: React.FC<Props> = ({ requestId, onClose }) => 
               {/* Request Info Grid */}
               <div className="grid grid-cols-2 gap-4 text-xs border border-slate-300 p-4 rounded-lg mb-6">
                 <div><strong>النادي الطلابي:</strong> {request.clubName}</div>
-                <div><strong>رئيس النادي:</strong> {request.presidentName} ({request.presidentPhone})</div>
+                <div>
+                  <strong>رئيس النادي:</strong> {(() => {
+                    const clubAcc = userAccounts.find(u => u.clubName === request.clubName);
+                    const name = request.presidentName || clubAcc?.name || 'غير مسجل';
+                    const phone = request.presidentPhone || clubAcc?.phone || '';
+                    return phone ? `${name} (${phone})` : name;
+                  })()}
+                </div>
                 <div><strong>عنوان الفعالية:</strong> {request.eventTitle}</div>
                 <div><strong>تاريخ وتوقيت الفعالية:</strong> {request.eventDate} ({request.startTime} - {request.endTime})</div>
                 <div className="col-span-2"><strong>المقر المعتمد:</strong> {request.locationSummary}</div>

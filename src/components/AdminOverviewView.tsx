@@ -35,7 +35,8 @@ export const AdminOverviewView: React.FC<Props> = ({ onOpenRequestDetails }) => 
     deleteTask,
     setIsSyncModalOpen,
     cloudSyncStatus,
-    lastSyncTime
+    lastSyncTime,
+    staffMembers
   } = useApp();
   const [deletingTarget, setDeletingTarget] = useState<{ task?: Task; request: ClubRequest } | null>(null);
 
@@ -150,7 +151,7 @@ export const AdminOverviewView: React.FC<Props> = ({ onOpenRequestDetails }) => 
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {STAFF_MEMBERS.map(staff => {
+          {staffMembers.map(staff => {
             const staffTasks = allTasks.filter(t => t.staffId === staff.id);
             const staffDone = staffTasks.filter(t => t.status === 'completed').length;
             const staffInProgress = staffTasks.filter(t => t.status === 'in_progress').length;

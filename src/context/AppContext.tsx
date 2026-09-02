@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import confetti from 'canvas-confetti';
 import { 
   RoleType, 
@@ -46,6 +46,7 @@ interface AppContextType {
   updateUserProfile: (updatedFields: Partial<UserAccount>, targetUserId?: string) => void;
   currentRole: RoleType;
   currentStaff: StaffMember | undefined;
+  staffMembers: StaffMember[];
   activeClubName: string;
   clubsList: string[];
   requests: ClubRequest[];
@@ -568,9 +569,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const userIdToUpdate = targetUserId || currentUser?.id;
     if (!userIdToUpdate) return;
 
+    let targetAccount: UserAccount | undefined;
+
     setUserAccounts(prev => prev.map(acc => {
       if (acc.id === userIdToUpdate) {
         const updated = { ...acc, ...updatedFields };
+        targetAccount = updated;
         if (currentUser?.id === userIdToUpdate) {
           setCurrentUser(updated);
         }
@@ -579,16 +583,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return acc;
     }));
 
-    // If club name changed, also update related requests club name
-    if (updatedFields.clubName && currentUser?.clubName) {
+    // If club president or account with clubName was updated, sync all existing requests for that club
+    const clubNameToMatch = targetAccount?.clubName || (currentUser?.id === userIdToUpdate ? currentUser?.clubName : undefined);
+    if (clubNameToMatch) {
       setRequests(prev => prev.map(r => {
-        if (r.clubName === currentUser.clubName) {
+        if (r.clubName === clubNameToMatch) {
           return {
             ...r,
-            clubName: updatedFields.clubName!,
-            presidentName: updatedFields.name || r.presidentName,
-            presidentPhone: updatedFields.phone || r.presidentPhone,
-            presidentEmail: updatedFields.email || r.presidentEmail,
+            clubName: updatedFields.clubName || r.clubName,
+            presidentName: updatedFields.name !== undefined ? updatedFields.name : r.presidentName,
+            presidentPhone: updatedFields.phone !== undefined ? updatedFields.phone : r.presidentPhone,
+            presidentEmail: updatedFields.email !== undefined ? updatedFields.email : r.presidentEmail,
           };
         }
         return r;
@@ -605,9 +610,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ...CLUBS_LIST
   ]));
 
-  const currentStaff = currentUser?.staffId 
-    ? STAFF_MEMBERS.find(s => s.id === currentUser.staffId)
-    : STAFF_MEMBERS.find(s => s.roleCode === currentRole);
+  // Dynamic staff members with live profile information from userAccounts
+  const staffMembers: StaffMember[] = useMemo(() => {
+    return STAFF_MEMBERS.map(staff => {
+      const staffAccount = userAccounts.find(u => u.staffId === staff.id || u.role === staff.roleCode);
+      if (staffAccount) {
+        return {
+          ...staff,
+          name: staffAccount.name || staff.name,
+          phone: staffAccount.phone || staff.phone,
+          email: staffAccount.email || staff.email,
+          office: staffAccount.office || staff.office,
+          avatarBg: staffAccount.avatarBg || staff.avatarBg,
+          title: staffAccount.title || staff.title,
+        };
+      }
+      return staff;
+    });
+  }, [userAccounts]);
+
+  const currentStaff: StaffMember | undefined = useMemo(() => {
+    const matched = currentUser?.staffId 
+      ? staffMembers.find(s => s.id === currentUser.staffId)
+      : staffMembers.find(s => s.roleCode === currentRole);
+    
+    if (matched && currentUser && (currentUser.role.startsWith('staff_') || currentUser.staffId)) {
+      return {
+        ...matched,
+        name: currentUser.name || matched.name,
+        phone: currentUser.phone || matched.phone,
+        email: currentUser.email || matched.email,
+        office: currentUser.office || matched.office,
+        title: currentUser.title || matched.title,
+        avatarBg: currentUser.avatarBg || matched.avatarBg,
+      };
+    }
+    return matched;
+  }, [currentUser, currentRole, staffMembers]);
 
   // ==========================================
   // Strict Privacy Filter for Requests & Tasks
@@ -1535,6 +1574,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateUserProfile,
         currentRole,
         currentStaff,
+        staffMembers,
         activeClubName,
         clubsList,
         requests,

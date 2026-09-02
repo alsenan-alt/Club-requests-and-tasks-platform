@@ -40,7 +40,8 @@ export const UserProfileModal: React.FC = () => {
     deleteClubAccount,
     isUserProfileModalOpen, 
     setIsUserProfileModalOpen,
-    requests 
+    requests,
+    staffMembers
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'manage_clubs' | 'staff_directory'>('profile');
@@ -909,7 +910,7 @@ export const UserProfileModal: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-1 gap-3">
-                {STAFF_MEMBERS.map(staff => (
+                {staffMembers.map(staff => (
                   <div key={staff.id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex items-start gap-3">
                       <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${staff.avatarBg} text-white flex items-center justify-center font-bold text-lg shrink-0 shadow-2xs`}>

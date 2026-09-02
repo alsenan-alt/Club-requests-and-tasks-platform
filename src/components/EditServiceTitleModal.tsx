@@ -47,7 +47,7 @@ const AVAILABLE_ICONS = [
 ];
 
 export const EditServiceTitleModal: React.FC<Props> = ({ isOpen, onClose, service }) => {
-  const { updateServiceInfo } = useApp();
+  const { updateServiceInfo, staffMembers } = useApp();
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -68,7 +68,7 @@ export const EditServiceTitleModal: React.FC<Props> = ({ isOpen, onClose, servic
   if (!isOpen || !service) return null;
 
   const dept = DEPARTMENTS[service.departmentId];
-  const staff = STAFF_MEMBERS.find(s => s.id === service.staffId);
+  const staff = staffMembers.find(s => s.id === service.staffId) || STAFF_MEMBERS.find(s => s.id === service.staffId);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

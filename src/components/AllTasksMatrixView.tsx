@@ -22,7 +22,7 @@ interface Props {
 }
 
 export const AllTasksMatrixView: React.FC<Props> = ({ onOpenRequestDetails }) => {
-  const { visibleRequests, currentUser, currentStaff, currentRole } = useApp();
+  const { visibleRequests, currentUser, currentStaff, currentRole, staffMembers } = useApp();
 
   const [staffFilter, setStaffFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -104,7 +104,7 @@ export const AllTasksMatrixView: React.FC<Props> = ({ onOpenRequestDetails }) =>
               className="text-xs font-semibold p-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500"
             >
               <option value="all">كافة الموظفين</option>
-              {STAFF_MEMBERS.map(s => (
+              {staffMembers.map(s => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
@@ -149,7 +149,7 @@ export const AllTasksMatrixView: React.FC<Props> = ({ onOpenRequestDetails }) =>
               ) : (
                 filteredTasks.map(({ task, request }) => {
                   const dept = DEPARTMENTS[task.departmentId];
-                  const staff = STAFF_MEMBERS.find(s => s.id === task.staffId);
+                  const staff = staffMembers.find(s => s.id === task.staffId) || STAFF_MEMBERS.find(s => s.id === task.staffId);
 
                   return (
                     <tr key={task.id} className="hover:bg-slate-50/80 transition-colors">

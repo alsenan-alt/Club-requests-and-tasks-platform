@@ -18,12 +18,13 @@ export const QuickServiceModal: React.FC<Props> = ({ isOpen, onClose, serviceId 
     currentRole, 
     services, 
     createSingleServiceRequest, 
-    setSelectedRequestId 
+    setSelectedRequestId,
+    staffMembers
   } = useApp();
 
   const service = services.find(s => s.id === serviceId) || services[0];
   const dept = DEPARTMENTS[service.departmentId];
-  const staff = STAFF_MEMBERS.find(sm => sm.id === service.staffId);
+  const staff = staffMembers.find(sm => sm.id === service.staffId) || STAFF_MEMBERS.find(sm => sm.id === service.staffId);
 
   const [clubName, setClubName] = useState(currentUser?.clubName || activeClubName || CLUBS_LIST[0]);
   const [presidentName, setPresidentName] = useState(currentUser?.name || 'رئيس النادي الطلابي');

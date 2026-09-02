@@ -42,7 +42,8 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
     clubsList,
     services,
     createNewRequest, 
-    setSelectedRequestId 
+    setSelectedRequestId,
+    staffMembers
   } = useApp();
 
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
@@ -659,7 +660,7 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
                 const srv = services.find(s => s.id === serviceId);
                 if (!srv) return null;
                 const dept = DEPARTMENTS[srv.departmentId];
-                const staff = STAFF_MEMBERS.find(sm => sm.id === srv.staffId);
+                const staff = staffMembers.find(sm => sm.id === srv.staffId) || STAFF_MEMBERS.find(sm => sm.id === srv.staffId);
                 const currentData = servicesData[serviceId] || { serviceId, priority: 'normal', details: {} };
 
                 return (
@@ -864,7 +865,7 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
                     const srv = services.find(s => s.id === serviceId);
                     if (!srv) return null;
                     const dept = DEPARTMENTS[srv.departmentId];
-                    const staff = STAFF_MEMBERS.find(sm => sm.id === srv.staffId);
+                    const staff = staffMembers.find(sm => sm.id === srv.staffId) || STAFF_MEMBERS.find(sm => sm.id === srv.staffId);
                     const srvData = servicesData[serviceId];
 
                     return (

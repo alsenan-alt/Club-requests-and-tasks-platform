@@ -28,7 +28,8 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
   const { 
     validateAndLogin, 
     userAccounts, 
-    registerNewClubPresident 
+    registerNewClubPresident,
+    staffMembers
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'clubs' | 'register_club' | 'staff' | 'admin'>('clubs');
@@ -163,7 +164,7 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
 
   const clubAccounts = userAccounts.filter(u => u.role === 'club_president');
   const selectedClubObj = clubAccounts.find(u => u.id === selectedClubUser);
-  const selectedStaffObj = STAFF_MEMBERS.find(s => s.roleCode === selectedStaffId);
+  const selectedStaffObj = staffMembers.find(s => s.roleCode === selectedStaffId) || STAFF_MEMBERS.find(s => s.roleCode === selectedStaffId);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 text-slate-100 flex flex-col justify-between p-4 sm:p-6 lg:p-8 font-['Cairo',sans-serif] relative overflow-hidden">
@@ -570,7 +571,7 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
                 )}
 
                 <div className="grid grid-cols-1 gap-3">
-                  {STAFF_MEMBERS.map(staff => (
+                  {staffMembers.map(staff => (
                     <div 
                       key={staff.id}
                       onClick={() => {
