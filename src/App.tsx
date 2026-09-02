@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Header } from './components/Header';
 import { ClubPresidentView } from './components/ClubPresidentView';
+import { ClubSupervisorView } from './components/ClubSupervisorView';
 import { StaffDashboardView } from './components/StaffDashboardView';
 import { AdminOverviewView } from './components/AdminOverviewView';
 import { VenueCalendarView } from './components/VenueCalendarView';
@@ -111,6 +112,12 @@ const MainContent: React.FC = () => {
               <ClubPresidentView
                 onOpenNewWizard={() => setIsNewRequestModalOpen(true)}
                 onOpenQuickService={handleOpenQuickService}
+                onOpenRequestDetails={handleOpenRequestDetails}
+              />
+            )}
+
+            {currentRole === 'club_supervisor' && (
+              <ClubSupervisorView
                 onOpenRequestDetails={handleOpenRequestDetails}
               />
             )}

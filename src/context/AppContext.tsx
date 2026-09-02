@@ -38,12 +38,30 @@ interface AppContextType {
     password?: string;
     email: string;
     phone: string;
+    supervisorId?: string;
+    supervisorName?: string;
     category?: string;
     office?: string;
     bio?: string;
   }) => UserAccount;
+  registerNewSupervisor: (formData: {
+    name: string;
+    title?: string;
+    department?: string;
+    email?: string;
+    phone?: string;
+    username?: string;
+    password?: string;
+    office?: string;
+    bio?: string;
+    supervisedClubNames?: string[];
+  }) => UserAccount;
   deleteClubAccount: (clubUserId: string) => { success: boolean; message: string };
+  deleteSupervisorAccount: (supervisorId: string) => { success: boolean; message: string };
   updateUserProfile: (updatedFields: Partial<UserAccount>, targetUserId?: string) => void;
+  approveRequestBySupervisor: (requestId: string, supervisorNotes?: string) => void;
+  rejectRequestBySupervisor: (requestId: string, reason: string) => void;
+  requestChangesBySupervisor: (requestId: string, notes: string) => void;
   currentRole: RoleType;
   currentStaff: StaffMember | undefined;
   staffMembers: StaffMember[];
@@ -119,6 +137,8 @@ interface AppContextType {
   currentAcademicYear: string;
   setCurrentAcademicYear: (year: string) => void;
   clearAllRequests: (options?: { academicYear?: string; archiveReason?: string }) => { success: boolean; message: string };
+  portalTheme: string;
+  setPortalTheme: (themeId: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -132,9 +152,26 @@ const STORAGE_KEYS = {
   DELETED_SERVICES: 'club_deleted_services_ids_v2',
   ACADEMIC_YEAR: 'club_current_academic_year_v2',
   LAST_MODIFIED: 'club_last_modified_timestamp_v2',
+  PORTAL_THEME: 'club_portal_theme_v2',
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Portal Theme State (Customizable by Admin & users)
+  const [portalTheme, setPortalThemeState] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.PORTAL_THEME);
+      if (saved) return saved;
+    } catch (e) {
+      console.error(e);
+    }
+    return 'emerald';
+  });
+
+  const setPortalTheme = (themeId: string) => {
+    setPortalThemeState(themeId);
+    localStorage.setItem(STORAGE_KEYS.PORTAL_THEME, themeId);
+  };
+
   // Academic Year State
   const [currentAcademicYear, setCurrentAcademicYearState] = useState<string>(() => {
     try {
@@ -485,6 +522,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     password?: string;
     email: string;
     phone: string;
+    supervisorId?: string;
+    supervisorName?: string;
     category?: string;
     office?: string;
     bio?: string;
@@ -501,6 +540,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ];
     const randomBg = colorGradients[Math.floor(Math.random() * colorGradients.length)];
 
+    const resolvedSupervisor = formData.supervisorId 
+      ? userAccounts.find(u => u.id === formData.supervisorId)
+      : undefined;
+
     const newAccount: UserAccount = {
       id: newUserId,
       username: formData.username.trim() || `club_${Date.now().toString().slice(-4)}`,
@@ -511,6 +554,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       title: `رئيس ${cleanClubName}`,
       email: formData.email.trim(),
       phone: formData.phone.trim(),
+      supervisorId: formData.supervisorId || resolvedSupervisor?.id,
+      supervisorName: formData.supervisorName || resolvedSupervisor?.name,
       office: formData.office?.trim() || 'المجمع الطلابي - مقر الأندية',
       avatarBg: randomBg,
       bio: formData.bio?.trim() || `النادي الطلابي المعتمد: ${cleanClubName}`,
@@ -519,17 +564,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       isCustom: true,
     };
 
-    setUserAccounts(prev => [newAccount, ...prev]);
+    // Update user accounts including the new account and update supervisor's supervisedClubNames
+    setUserAccounts(prev => {
+      const updated = [newAccount, ...prev];
+      if (newAccount.supervisorId) {
+        return updated.map(u => {
+          if (u.id === newAccount.supervisorId) {
+            const existingClubs = u.supervisedClubNames || [];
+            if (!existingClubs.includes(cleanClubName)) {
+              return {
+                ...u,
+                supervisedClubNames: [...existingClubs, cleanClubName]
+              };
+            }
+          }
+          return u;
+        });
+      }
+      return updated;
+    });
+
     setCurrentUser(newAccount);
     setSelectedRequestId(null);
 
-    // Welcome Notification
+    // Welcome & Supervisor Notifications
     const timestamp = new Date().toISOString();
-    setNotifications(prev => [
+    const newNotifs: NotificationItem[] = [
       {
         id: `notif-${Date.now()}`,
         title: `مرحباً بك في منظومة الأندية!`,
-        message: `تم تفعيل حساب ${cleanClubName} برئاسة ${formData.presidentName} بنجاح. يمكنك الآن تقديم الطلبات ومتابعة التوجيه.`,
+        message: `تم تفعيل حساب ${cleanClubName} برئاسة ${formData.presidentName} بنجاح. المشرف المسند: ${newAccount.supervisorName || 'الإدارة العامة'}.`,
         targetRole: 'club_president',
         timestamp,
         read: false,
@@ -538,14 +602,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       {
         id: `notif-admin-${Date.now()}`,
         title: `تسجيل نادٍ جديد: ${cleanClubName}`,
-        message: `قام ${formData.presidentName} بتسجيل وتفعيل حساب ${cleanClubName}.`,
+        message: `قام ${formData.presidentName} بتسجيل ${cleanClubName} تحت إشراف (${newAccount.supervisorName || 'غير محدد'}).`,
         targetRole: 'admin',
         timestamp,
         read: false,
         type: 'alert',
       },
-      ...prev,
-    ]);
+    ];
+
+    if (newAccount.supervisorId) {
+      newNotifs.push({
+        id: `notif-sup-${Date.now()}`,
+        title: `تعيين إشراف على نادٍ جديد: ${cleanClubName}`,
+        message: `تم تسجيل ${cleanClubName} وتعيينكم مشرفاً أكاديمياً للنادي بواسطة الرئيس ${formData.presidentName}.`,
+        targetRole: 'club_supervisor',
+        timestamp,
+        read: false,
+        type: 'alert',
+      });
+    }
+
+    setNotifications(prev => [...newNotifs, ...prev]);
 
     try {
       confetti({
@@ -559,6 +636,125 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     return newAccount;
+  };
+
+  // Register New Club Supervisor
+  const registerNewSupervisor = (formData: {
+    name: string;
+    title?: string;
+    department?: string;
+    email?: string;
+    phone?: string;
+    username?: string;
+    password?: string;
+    office?: string;
+    bio?: string;
+    supervisedClubNames?: string[];
+  }): UserAccount => {
+    const newUserId = `user_sup_${Date.now().toString().slice(-6)}`;
+    const cleanName = formData.name.trim();
+
+    const colorGradients = [
+      'from-amber-600 to-orange-700',
+      'from-orange-600 to-amber-700',
+      'from-yellow-600 to-amber-800',
+      'from-amber-500 to-red-600'
+    ];
+    const randomBg = colorGradients[Math.floor(Math.random() * colorGradients.length)];
+
+    const newAccount: UserAccount = {
+      id: newUserId,
+      username: formData.username?.trim() || `supervisor_${Date.now().toString().slice(-4)}`,
+      password: (formData.password || '123').trim(),
+      name: cleanName,
+      role: 'club_supervisor',
+      title: formData.title?.trim() || 'مشرف نادي طلابي',
+      department: formData.department?.trim() || 'إشراف الأندية الطلابية',
+      email: formData.email?.trim() || `${cleanName.toLowerCase().replace(/\s+/g, '.')}@kfupm.edu.sa`,
+      phone: formData.phone?.trim() || '',
+      office: formData.office?.trim() || 'مبنى العمادة / الكلية',
+      avatarBg: randomBg,
+      bio: formData.bio?.trim() || `مشرف أكاديمي معتمد للأندية الطلابية بجامعة الملك فهد للبترول والمعادن.`,
+      supervisedClubNames: formData.supervisedClubNames || [],
+      isCustom: true,
+    };
+
+    setUserAccounts(prev => [newAccount, ...prev]);
+    setCurrentUser(newAccount);
+    setSelectedRequestId(null);
+
+    // Notifications
+    const timestamp = new Date().toISOString();
+    const newNotifs: NotificationItem[] = [
+      {
+        id: `notif-sup-reg-${Date.now()}`,
+        title: `مرحباً بك في منظومة الإشراف الأكاديمي!`,
+        message: `تم تفعيل حساب المشرف ${cleanName} بنجاح. يمكنك الآن مراجعة واعتماد طلبات وفعاليات الأندية المسندة إليك.`,
+        targetRole: 'club_supervisor',
+        timestamp,
+        read: false,
+        type: 'alert',
+      },
+      {
+        id: `notif-admin-sup-${Date.now()}`,
+        title: `تسجيل مشرف جديد: ${cleanName}`,
+        message: `تم تسجيل ${cleanName} (${newAccount.department}) كمشرف أكاديمي للأندية الطلابية.`,
+        targetRole: 'admin',
+        timestamp,
+        read: false,
+        type: 'alert',
+      },
+    ];
+
+    setNotifications(prev => [...newNotifs, ...prev]);
+
+    try {
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ['#f59e0b', '#d97706', '#10b981', '#3b82f6']
+      });
+    } catch (e) {
+      // ignore
+    }
+
+    return newAccount;
+  };
+
+  // Delete Supervisor Account
+  const deleteSupervisorAccount = (supervisorId: string): { success: boolean; message: string } => {
+    const target = userAccounts.find(u => u.id === supervisorId);
+    if (!target) {
+      return { success: false, message: 'لم يتم العثور على حساب المشرف المحدد' };
+    }
+    if (target.role !== 'club_supervisor') {
+      return { success: false, message: 'لا يمكن حذف هذا الحساب لأنه ليس مشرفاً' };
+    }
+
+    const supName = target.name;
+    setUserAccounts(prev => prev.filter(u => u.id !== supervisorId));
+
+    if (currentUser?.id === supervisorId) {
+      const fallbackUser = userAccounts.find(u => u.role === 'admin') || userAccounts[0];
+      setCurrentUser(fallbackUser);
+    }
+
+    const timestamp = new Date().toISOString();
+    setNotifications(prev => [
+      {
+        id: `notif-sup-del-${Date.now()}`,
+        title: `حذف حساب مشرف: ${supName}`,
+        message: `تم إزالة حساب المشرف ${supName} من سجل المشرفين المعتمدين.`,
+        targetRole: 'admin',
+        timestamp,
+        read: false,
+        type: 'alert',
+      },
+      ...prev,
+    ]);
+
+    return { success: true, message: `تم حذف حساب المشرف (${supName}) بنجاح` };
   };
 
   // Delete Club Account (Admin capability)
@@ -690,20 +886,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // 1. Admin sees everything for supervision
     if (currentUser.role === 'admin') return true;
 
-    // 2. Club President ONLY sees their own club's requests
+    // 2. Club Supervisor sees requests from supervised clubs
+    if (currentUser.role === 'club_supervisor') {
+      const supervisedList = currentUser.supervisedClubNames || [];
+      return (
+        req.supervisorId === currentUser.id ||
+        req.supervisorName === currentUser.name ||
+        supervisedList.includes(req.clubName) ||
+        userAccounts.some(u => u.clubName === req.clubName && (u.supervisorId === currentUser.id || u.supervisorName === currentUser.name))
+      );
+    }
+
+    // 3. Club President ONLY sees their own club's requests
     if (currentUser.role === 'club_president') {
       return req.clubName === currentUser.clubName;
     }
 
-    // 3. Staff Member ONLY sees requests that contain tasks assigned to them
+    // 4. Staff Member ONLY sees requests that contain tasks assigned to them AND are approved by supervisor (not pending_supervisor)
     if (currentStaff) {
+      if (req.status === 'pending_supervisor') return false;
       return req.tasks.some(t => t.staffId === currentStaff.id);
     }
 
     return false;
   }).map(req => {
     // If user is a staff member, privacy protection hides other staff's private details
-    if (currentStaff && currentUser?.role !== 'admin') {
+    if (currentStaff && currentUser?.role !== 'admin' && currentUser?.role !== 'club_supervisor') {
       return {
         ...req,
         // Only include tasks belonging to this staff member
@@ -747,6 +955,151 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return 'submitted';
   };
 
+  // Supervisor Approval Workflow Methods
+  const approveRequestBySupervisor = (requestId: string, supervisorNotes?: string) => {
+    const timestamp = new Date().toISOString();
+    let targetReq: ClubRequest | undefined;
+
+    setRequests(prev => prev.map(req => {
+      if (req.id !== requestId) return req;
+      const updated: ClubRequest = {
+        ...req,
+        status: 'submitted',
+        supervisorStatus: 'approved',
+        supervisorApprovalDate: timestamp,
+        supervisorNotes: supervisorNotes || req.supervisorNotes || 'تمت الموافقة والاعتماد من مشرف النادي.',
+        updatedAt: timestamp,
+      };
+      targetReq = updated;
+      return updated;
+    }));
+
+    if (targetReq) {
+      const newNotifs: NotificationItem[] = [];
+      const staffIdsTargeted = Array.from(new Set(targetReq.tasks.map(t => t.staffId)));
+
+      // Notify targeted staff members now that supervisor has approved
+      staffIdsTargeted.forEach(staffId => {
+        const staff = staffMembers.find(s => s.id === staffId) || STAFF_MEMBERS.find(s => s.id === staffId);
+        if (staff) {
+          const staffTasks = targetReq!.tasks.filter(t => t.staffId === staffId);
+          newNotifs.push({
+            id: `notif-${Date.now()}-${staffId}`,
+            title: `مهام معتمدة جديدة من ${targetReq!.clubName}`,
+            message: `اعتمد المشرف فعالية (${targetReq!.eventTitle}) وتم توجيه ${staffTasks.length} مهام لاختصاصك.`,
+            targetRole: staff.roleCode,
+            requestId: targetReq!.id,
+            timestamp,
+            read: false,
+            type: 'new_request',
+          });
+        }
+      });
+
+      // Notify Club President
+      newNotifs.push({
+        id: `notif-${Date.now()}-club-approved`,
+        title: `تم اعتماد فعاليتك من المشرف! 🎉`,
+        message: `اعتمد مشرف النادي طلب (${targetReq.eventTitle}) وأحيلت المهام مباشرة للموظفين المختصين للتنفيذ.`,
+        targetRole: 'club_president',
+        requestId: targetReq.id,
+        timestamp,
+        read: false,
+        type: 'status_change',
+      });
+
+      // Notify Admin
+      newNotifs.push({
+        id: `notif-${Date.now()}-admin-approved`,
+        title: `اعتماد مشرف: ${targetReq.clubName}`,
+        message: `تم اعتماد طلب (${targetReq.eventTitle}) من قبل المشرف وإحالته لإجراءات التنفيذ.`,
+        targetRole: 'admin',
+        requestId: targetReq.id,
+        timestamp,
+        read: false,
+        type: 'status_change',
+      });
+
+      setNotifications(prev => [...newNotifs, ...prev]);
+
+      try {
+        confetti({
+          particleCount: 80,
+          spread: 60,
+          origin: { y: 0.6 },
+          colors: ['#059669', '#10b981', '#3b82f6', '#f59e0b']
+        });
+      } catch (e) {}
+    }
+  };
+
+  const rejectRequestBySupervisor = (requestId: string, reason: string) => {
+    const timestamp = new Date().toISOString();
+    let targetReq: ClubRequest | undefined;
+
+    setRequests(prev => prev.map(req => {
+      if (req.id !== requestId) return req;
+      const updated: ClubRequest = {
+        ...req,
+        status: 'rejected',
+        supervisorStatus: 'rejected',
+        supervisorNotes: reason,
+        updatedAt: timestamp,
+      };
+      targetReq = updated;
+      return updated;
+    }));
+
+    if (targetReq) {
+      setNotifications(prev => [
+        {
+          id: `notif-${Date.now()}-club-rej`,
+          title: `اعتذار مشرف النادي عن الفعالية`,
+          message: `اعتذر المشرف عن اعتماد (${targetReq?.eventTitle}): "${reason}"`,
+          targetRole: 'club_president',
+          requestId,
+          timestamp,
+          read: false,
+          type: 'alert',
+        },
+        ...prev,
+      ]);
+    }
+  };
+
+  const requestChangesBySupervisor = (requestId: string, notes: string) => {
+    const timestamp = new Date().toISOString();
+    let targetReq: ClubRequest | undefined;
+
+    setRequests(prev => prev.map(req => {
+      if (req.id !== requestId) return req;
+      const updated: ClubRequest = {
+        ...req,
+        supervisorStatus: 'needs_info',
+        supervisorNotes: notes,
+        updatedAt: timestamp,
+      };
+      targetReq = updated;
+      return updated;
+    }));
+
+    if (targetReq) {
+      setNotifications(prev => [
+        {
+          id: `notif-${Date.now()}-club-info`,
+          title: `ملاحظات وتعديلات من مشرف النادي`,
+          message: `طلب المشرف تعديلات بخصوص (${targetReq?.eventTitle}): "${notes}"`,
+          targetRole: 'club_president',
+          requestId,
+          timestamp,
+          read: false,
+          type: 'alert',
+        },
+        ...prev,
+      ]);
+    }
+  };
+
   // Automated routing & request creation with privacy isolation
   const createNewRequest = (formData: {
     clubName?: string;
@@ -786,11 +1139,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ? currentUser.phone
       : (formData.presidentPhone || '0550000000');
 
+    // Resolve club supervisor
+    const clubAccount = userAccounts.find(u => u.role === 'club_president' && (u.clubName === resolvedClubName || u.id === currentUser?.id));
+    const resolvedSupervisorId = currentUser?.supervisorId || clubAccount?.supervisorId;
+    const resolvedSupervisorName = currentUser?.supervisorName || clubAccount?.supervisorName || (resolvedSupervisorId ? userAccounts.find(u => u.id === resolvedSupervisorId)?.name : undefined);
+
+    const hasSupervisor = Boolean(resolvedSupervisorId || resolvedSupervisorName);
+
     // Auto-generate routed tasks
     const tasks: Task[] = Object.entries(formData.servicesData).map(([srvKey, srvData], index) => {
-      const srvDef = AVAILABLE_SERVICES.find(s => s.id === srvData.serviceId);
+      const srvDef = services.find(s => s.id === srvData.serviceId) || AVAILABLE_SERVICES.find(s => s.id === srvData.serviceId);
       const deptDef = srvDef ? DEPARTMENTS[srvDef.departmentId] : undefined;
-      const staff = STAFF_MEMBERS.find(sm => sm.id === srvDef?.staffId);
+      const staff = staffMembers.find(sm => sm.id === srvDef?.staffId) || STAFF_MEMBERS.find(sm => sm.id === srvDef?.staffId);
 
       return {
         id: `TSK-${100 * count + index + 1}`,
@@ -817,6 +1177,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       presidentName: resolvedPresidentName,
       presidentPhone: resolvedPresidentPhone,
       presidentEmail: resolvedPresidentEmail,
+      supervisorId: resolvedSupervisorId,
+      supervisorName: resolvedSupervisorName,
+      supervisorStatus: hasSupervisor ? 'pending' : 'approved',
       eventTitle: formData.eventTitle,
       eventType: formData.eventType,
       eventDate: formData.eventDate,
@@ -826,32 +1189,58 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       expectedAttendees: Number(formData.expectedAttendees) || 50,
       description: formData.description,
       budget: formData.budget,
-      status: 'submitted',
+      status: hasSupervisor ? 'pending_supervisor' : 'submitted',
       tasks,
       createdAt: timestamp,
       updatedAt: timestamp,
     };
 
-    // Create notifications for each assigned staff member
     const newNotifs: NotificationItem[] = [];
-    const staffIdsTargeted = Array.from(new Set(tasks.map(t => t.staffId)));
 
-    staffIdsTargeted.forEach(staffId => {
-      const staff = STAFF_MEMBERS.find(s => s.id === staffId);
-      if (staff) {
-        const staffTasks = tasks.filter(t => t.staffId === staffId);
-        newNotifs.push({
-          id: `notif-${Date.now()}-${staffId}`,
-          title: `مهام جديدة من ${resolvedClubName}`,
-          message: `تم توجيه ${staffTasks.length} مهمة بخصوص (${formData.eventTitle}) إلى إدارتك.`,
-          targetRole: staff.roleCode,
-          requestId: reqId,
-          timestamp,
-          read: false,
-          type: 'new_request',
-        });
-      }
-    });
+    if (hasSupervisor) {
+      // 1. Notify the supervisor to review and approve
+      newNotifs.push({
+        id: `notif-${Date.now()}-sup`,
+        title: `طلب اعتماد فعالية جديد: ${resolvedClubName}`,
+        message: `تم رفع طلب (${formData.eventTitle}) للاعتماد من قِبلكم لإحالته للموظفين المعنيين.`,
+        targetRole: 'club_supervisor',
+        requestId: reqId,
+        timestamp,
+        read: false,
+        type: 'new_request',
+      });
+
+      // 2. Confirmation to the club president
+      newNotifs.push({
+        id: `notif-${Date.now()}-pres`,
+        title: `تم رفع الطلب للمشرف (${resolvedSupervisorName || 'المشرف الأكاديمي'})`,
+        message: `تم إرسال طلب فعالية (${formData.eventTitle}) بنجاح وبانتظار اعتماد المشرف للانتقال للتنفيذ.`,
+        targetRole: 'club_president',
+        requestId: reqId,
+        timestamp,
+        read: false,
+        type: 'status_change',
+      });
+    } else {
+      // If no supervisor, route directly to staff members
+      const staffIdsTargeted = Array.from(new Set(tasks.map(t => t.staffId)));
+      staffIdsTargeted.forEach(staffId => {
+        const staff = staffMembers.find(s => s.id === staffId) || STAFF_MEMBERS.find(s => s.id === staffId);
+        if (staff) {
+          const staffTasks = tasks.filter(t => t.staffId === staffId);
+          newNotifs.push({
+            id: `notif-${Date.now()}-${staffId}`,
+            title: `مهام جديدة من ${resolvedClubName}`,
+            message: `تم توجيه ${staffTasks.length} مهمة بخصوص (${formData.eventTitle}) إلى إدارتك.`,
+            targetRole: staff.roleCode,
+            requestId: reqId,
+            timestamp,
+            read: false,
+            type: 'new_request',
+          });
+        }
+      });
+    }
 
     setRequests(prev => [newRequest, ...prev]);
     setNotifications(prev => [...newNotifs, ...prev]);
@@ -1679,8 +2068,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         changePassword,
         logout,
         registerNewClubPresident,
+        registerNewSupervisor,
         deleteClubAccount,
+        deleteSupervisorAccount,
         updateUserProfile,
+        approveRequestBySupervisor,
+        rejectRequestBySupervisor,
+        requestChangesBySupervisor,
         currentRole,
         currentStaff,
         staffMembers,
@@ -1733,6 +2127,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         currentAcademicYear,
         setCurrentAcademicYear,
         clearAllRequests,
+        portalTheme,
+        setPortalTheme,
       }}
     >
       {children}

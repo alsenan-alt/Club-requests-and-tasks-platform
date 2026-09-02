@@ -6,19 +6,19 @@ import {
   ShieldCheck, 
   UserPlus, 
   Sparkles, 
-  ArrowLeft, 
-  CheckCircle2, 
   Lock, 
   Eye, 
   EyeOff, 
   AlertTriangle, 
   KeyRound, 
   ShieldAlert, 
-  HelpCircle 
+  HelpCircle,
+  GraduationCap,
+  UserCheck
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { STAFF_MEMBERS, DEPARTMENTS } from '../data/initialData';
-import { RoleType, UserAccount } from '../types';
+import { STAFF_MEMBERS } from '../data/initialData';
+import { getPortalTheme } from '../data/portalThemes';
 
 interface Props {
   onOpenReferenceGuide: () => void;
@@ -29,10 +29,14 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
     validateAndLogin, 
     userAccounts, 
     registerNewClubPresident,
-    staffMembers
+    registerNewSupervisor,
+    staffMembers,
+    portalTheme
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'clubs' | 'register_club' | 'staff' | 'admin'>('clubs');
+  const currentTheme = getPortalTheme(portalTheme);
+
+  const [activeTab, setActiveTab] = useState<'clubs' | 'supervisors' | 'register_club' | 'staff' | 'admin'>('clubs');
   
   // Club Login State
   const [selectedClubUser, setSelectedClubUser] = useState<string>(() => {
@@ -42,6 +46,30 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
   const [clubPassword, setClubPassword] = useState('');
   const [showClubPassword, setShowClubPassword] = useState(false);
   const [clubError, setClubError] = useState('');
+
+  // Supervisor Tab Sub-mode: 'login' or 'register'
+  const [supervisorMode, setSupervisorMode] = useState<'login' | 'register'>('login');
+
+  // Supervisor Login State
+  const supervisorAccounts = userAccounts.filter(u => u.role === 'club_supervisor');
+  const [selectedSupervisorId, setSelectedSupervisorId] = useState<string>(() => {
+    const sup = supervisorAccounts[0];
+    return sup ? sup.id : 'user_sup_eng';
+  });
+  const [supervisorPassword, setSupervisorPassword] = useState('');
+  const [showSupervisorPassword, setShowSupervisorPassword] = useState(false);
+  const [supervisorError, setSupervisorError] = useState('');
+
+  // New Supervisor Registration State
+  const [regSupName, setRegSupName] = useState('');
+  const [regSupEmail, setRegSupEmail] = useState('');
+  const [regSupPhone, setRegSupPhone] = useState('');
+  const [regSupOffice, setRegSupOffice] = useState('');
+  const [regSupPassword, setRegSupPassword] = useState('');
+  const [regSupConfirmPassword, setRegSupConfirmPassword] = useState('');
+  const [showRegSupPassword, setShowRegSupPassword] = useState(false);
+  const [regSupBio, setRegSupBio] = useState('');
+  const [regSupError, setRegSupError] = useState('');
 
   // Staff Login State
   const [selectedStaffId, setSelectedStaffId] = useState<string>('staff_hussein');
@@ -65,6 +93,10 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
   const [regPhone, setRegPhone] = useState('');
   const [regCategory, setRegCategory] = useState('تقني وهندسي');
   const [customRegCategory, setCustomRegCategory] = useState('');
+  const [regSupervisorId, setRegSupervisorId] = useState<string>(() => {
+    const sup = userAccounts.find(u => u.role === 'club_supervisor');
+    return sup ? sup.id : '';
+  });
   const [regOffice, setRegOffice] = useState('');
   const [regBio, setRegBio] = useState('');
   const [regError, setRegError] = useState('');
@@ -80,6 +112,61 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
     const res = validateAndLogin(selectedClubUser, clubPassword);
     if (!res.success) {
       setClubError(res.message || 'كلمة المرور غير صحيحة، يرجى التأكد والمحاولة ثانية');
+    }
+  };
+
+  // Handle Supervisor Login
+  const handleSupervisorLogin = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setSupervisorError('');
+    if (!selectedSupervisorId) {
+      setSupervisorError('يرجى اختيار المشرف الأكاديمي');
+      return;
+    }
+    if (!supervisorPassword) {
+      setSupervisorError('يرجى إدخال كلمة المرور للمتابعة');
+      return;
+    }
+    const res = validateAndLogin(selectedSupervisorId, supervisorPassword);
+    if (!res.success) {
+      setSupervisorError(res.message || 'كلمة المرور غير صحيحة، يرجى التأكد والمحاولة ثانية');
+    }
+  };
+
+  // Handle New Supervisor Registration Submit
+  const handleRegisterSupervisorSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setRegSupError('');
+
+    if (!regSupName.trim()) {
+      setRegSupError('يرجى كتابة الاسم الثلاثي للمشرف الأكاديمي');
+      return;
+    }
+
+    if (!regSupEmail.trim()) {
+      setRegSupError('يرجى إدخال البريد الإلكتروني الجامعي');
+      return;
+    }
+
+    const pass = regSupPassword.trim() || '123';
+    if (regSupPassword && regSupConfirmPassword && regSupPassword !== regSupConfirmPassword) {
+      setRegSupError('كلمتا المرور غير متطابقتين، يرجى التحقق');
+      return;
+    }
+
+    try {
+      registerNewSupervisor({
+        name: regSupName.trim(),
+        title: 'مشرف أكاديمي معتمد',
+        department: 'إشراف الأندية الطلابية',
+        email: regSupEmail.trim(),
+        phone: regSupPhone.trim(),
+        office: regSupOffice.trim() || 'مبنى العمادة / الكلية',
+        password: pass,
+        bio: regSupBio.trim() || `مشرف أكاديمي معتمد لدى عمادة شؤون الطلاب.`,
+      });
+    } catch (err: any) {
+      setRegSupError(err?.message || 'حدث خطأ أثناء تسجيل حساب المشرف');
     }
   };
 
@@ -150,6 +237,8 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
       ? (customRegCategory.trim() || 'عام ومخصص') 
       : regCategory;
 
+    const selectedSup = supervisorAccounts.find(s => s.id === regSupervisorId);
+
     const newAccount = registerNewClubPresident({
       clubName: regClubName,
       presidentName: regPresName,
@@ -158,6 +247,8 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
       email: regEmail.trim() || `${regPresName.toLowerCase().replace(/\s+/g, '.')}@student.kfupm.edu.sa`,
       phone: regPhone.trim(),
       category: finalCategory,
+      supervisorId: regSupervisorId || undefined,
+      supervisorName: selectedSup?.name || undefined,
       office: regOffice.trim() || 'مقر الأندية - مبنى 10',
       bio: regBio.trim() || `نادي ${regClubName} الطلابي المعتمد بجامعة الملك فهد للبترول والمعادن.`,
     });
@@ -169,19 +260,20 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
 
   const clubAccounts = userAccounts.filter(u => u.role === 'club_president');
   const selectedClubObj = clubAccounts.find(u => u.id === selectedClubUser);
+  const selectedSupervisorObj = supervisorAccounts.find(u => u.id === selectedSupervisorId);
   const selectedStaffObj = staffMembers.find(s => s.roleCode === selectedStaffId) || STAFF_MEMBERS.find(s => s.roleCode === selectedStaffId);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 text-slate-100 flex flex-col justify-between p-4 sm:p-6 lg:p-8 font-['Cairo',sans-serif] relative overflow-hidden">
+    <div className={`min-h-screen bg-gradient-to-br ${currentTheme.bgGradient} text-slate-100 flex flex-col justify-between p-4 sm:p-6 lg:p-8 font-['Cairo',sans-serif] relative overflow-hidden transition-colors duration-500`}>
       
       {/* Background ambient lighting */}
-      <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className={`absolute top-0 right-0 w-[500px] h-[500px] ${currentTheme.ambientGlowPrimary} rounded-full blur-3xl pointer-events-none transition-all duration-500`} />
+      <div className={`absolute bottom-0 left-0 w-[500px] h-[500px] ${currentTheme.ambientGlowSecondary} rounded-full blur-3xl pointer-events-none transition-all duration-500`} />
 
       {/* Top Bar */}
       <div className="max-w-6xl w-full mx-auto flex items-center justify-between z-10">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center text-white shadow-lg shadow-emerald-900/40">
+          <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${currentTheme.topLogoBg} flex items-center justify-center text-white shadow-lg`}>
             <Building2 className="w-5 h-5" />
           </div>
           <div>
@@ -194,7 +286,7 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2 sm:gap-2.5">
           <button
             onClick={onOpenReferenceGuide}
             className="text-xs text-slate-300 hover:text-white bg-white/10 hover:bg-white/15 px-3.5 py-1.5 rounded-xl border border-white/10 transition-colors flex items-center gap-1.5 cursor-pointer backdrop-blur-xs"
@@ -206,27 +298,27 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
       </div>
 
       {/* Main Login Card */}
-      <div className="max-w-3xl w-full mx-auto my-8 z-10 animate-in fade-in zoom-in-95 duration-300">
+      <div className="max-w-4xl w-full mx-auto my-8 z-10 animate-in fade-in zoom-in-95 duration-300">
         
         {/* Header Intro */}
         <div className="text-center mb-6">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 text-xs font-semibold mb-3">
+          <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full ${currentTheme.topBadgeClass} text-xs font-semibold mb-3`}>
             <Lock className="w-3.5 h-3.5" />
             <span>بوابة تسجيل الدخول الآمنة بالتحقق من كلمة المرور</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-white font-['Tajawal',sans-serif] tracking-tight">
             منظومة طلبات وتوجيه مهام الأندية الطلابية
           </h1>
-          <p className="text-xs sm:text-sm text-slate-300 mt-2 max-w-xl mx-auto leading-relaxed">
-            تسجيل الدخول محمي بكلمة مرور لكل حساب؛ يمنح كل نادٍ خصوصية تامة لعزل بياناته، ويقصر صلاحية كل موظف على مهامه الموكلة.
+          <p className="text-xs sm:text-sm text-slate-300 mt-2 max-w-2xl mx-auto leading-relaxed">
+            تسجيل الدخول محمي بكلمة مرور لكل حساب؛ يمنح كل نادٍ ومشرف خصوصية تامة لعزل بياناته، ويقصر صلاحية كل موظف على مهامه الموكلة.
           </p>
         </div>
 
         {/* Portal Container */}
-        <div className="bg-slate-900/90 backdrop-blur-md rounded-3xl border border-slate-700/80 shadow-2xl overflow-hidden">
+        <div className={`${currentTheme.cardBg} backdrop-blur-md rounded-3xl border ${currentTheme.cardBorder} ring-1 ${currentTheme.cardGlowRing} shadow-2xl overflow-hidden transition-all duration-300`}>
           
           {/* Category Tabs */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 border-b border-slate-800 p-2 gap-2 bg-slate-950/40">
+          <div className="grid grid-cols-2 sm:grid-cols-5 border-b border-slate-800 p-2 gap-2 bg-slate-950/40">
             
             {/* Tab 1: Clubs Login */}
             <button
@@ -241,7 +333,20 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
               <span>دخول الأندية ({clubAccounts.length})</span>
             </button>
 
-            {/* Tab 2: Register New Club */}
+            {/* Tab 2: Supervisors Login */}
+            <button
+              onClick={() => { setActiveTab('supervisors'); setSupervisorError(''); }}
+              className={`py-3 px-2 text-xs sm:text-sm font-bold rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                activeTab === 'supervisors'
+                  ? 'bg-gradient-to-r from-amber-600 to-orange-700 text-white shadow-lg shadow-amber-900/30 border border-amber-500/40'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+              }`}
+            >
+              <GraduationCap className="w-4 h-4 text-amber-300" />
+              <span>مشرفو الأندية ({supervisorAccounts.length})</span>
+            </button>
+
+            {/* Tab 3: Register New Club */}
             <button
               onClick={() => { setActiveTab('register_club'); setRegError(''); }}
               className={`py-3 px-2 text-xs sm:text-sm font-bold rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
@@ -254,7 +359,7 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
               <span>تسجيل نادٍ جديد ✨</span>
             </button>
 
-            {/* Tab 3: Staff Members */}
+            {/* Tab 4: Staff Members */}
             <button
               onClick={() => { setActiveTab('staff'); setStaffError(''); }}
               className={`py-3 px-2 text-xs sm:text-sm font-bold rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
@@ -267,7 +372,7 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
               <span>الموظفون المعنيون</span>
             </button>
 
-            {/* Tab 4: Admin Supervision */}
+            {/* Tab 5: Admin Supervision */}
             <button
               onClick={() => { setActiveTab('admin'); setAdminError(''); }}
               className={`py-3 px-2 text-xs sm:text-sm font-bold rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
@@ -314,7 +419,7 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
                   >
                     {clubAccounts.map(acc => (
                       <option key={acc.id} value={acc.id}>
-                        🎓 {acc.clubName} — ({acc.name})
+                        🎓 {acc.clubName} — ({acc.name}) {acc.supervisorName ? `[مشرف النادي: ${acc.supervisorName}]` : ''}
                       </option>
                     ))}
                   </select>
@@ -347,19 +452,26 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
                     </button>
                   </div>
                   {selectedClubObj && (
-                    <span className="text-[10px] text-slate-400 mt-1 block">
-                      رئيس النادي الحالي: <strong className="text-slate-300">{selectedClubObj.name}</strong>
-                    </span>
+                    <div className="flex flex-wrap items-center justify-between gap-2 mt-1.5">
+                      <span className="text-[11px] text-slate-400">
+                        رئيس النادي الحالي: <strong className="text-slate-200">{selectedClubObj.name}</strong>
+                      </span>
+                      {selectedClubObj.supervisorName && (
+                        <span className="text-[11px] text-amber-400 bg-amber-950/40 px-2 py-0.5 rounded-full border border-amber-500/30">
+                          👨‍🏫 المشرف: {selectedClubObj.supervisorName}
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
 
                 <div className="p-3.5 bg-emerald-950/40 border border-emerald-500/20 rounded-2xl text-xs space-y-1.5">
                   <div className="flex items-center gap-2 text-emerald-300 font-bold">
                     <ShieldAlert className="w-4 h-4 shrink-0" />
-                    <span>تأكيد الخصوصية والأمان:</span>
+                    <span>تأكيد الخصوصية وسلسلة الاعتماد:</span>
                   </div>
                   <p className="text-slate-300 text-[11px] leading-relaxed">
-                    عند تسجيل الدخول، ستتمكن حصرياً من متابعة طلبات وفعاليات ناديك فقط دون الاطلاع على بيانات الأندية الأخرى.
+                    عند تقديم أي طلب، يُحال تلقائياً لمشرف ناديك للاعتماد الأكاديمي، وبمجرد موافقته يتلقى الموظفون التنفيذيون مهامهم فوراً.
                   </p>
                 </div>
 
@@ -368,7 +480,7 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
                   className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold text-sm shadow-xl shadow-emerald-950/50 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98"
                 >
                   <Lock className="w-4 h-4" />
-                  <span>تأكيد كلمة المرور والدخول</span>
+                  <span>دخول منصة ({selectedClubObj?.clubName || 'النادي'})</span>
                 </button>
 
                 {/* Quick 1-click presets */}
@@ -380,7 +492,7 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
                     <button
                       type="button"
                       onClick={() => setActiveTab('register_club')}
-                      className="text-[11px] text-teal-400 hover:underline font-bold"
+                      className="text-[11px] text-teal-400 hover:underline font-bold cursor-pointer"
                     >
                       + تسجيل نادٍ جديد
                     </button>
@@ -410,14 +522,325 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
               </form>
             )}
 
-            {/* TAB 2: Register New Club President */}
+            {/* TAB 2: Club Supervisors Login & Registration */}
+            {activeTab === 'supervisors' && (
+              <div className="space-y-5 animate-in fade-in">
+                {/* Supervisor Sub-Mode Toggle */}
+                <div className="flex items-center p-1 bg-slate-900/90 border border-slate-700/80 rounded-2xl gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSupervisorMode('login');
+                      setSupervisorError('');
+                      setRegSupError('');
+                    }}
+                    className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                      supervisorMode === 'login'
+                        ? 'bg-amber-500 text-slate-950 shadow-md'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                    }`}
+                  >
+                    <KeyRound className="w-3.5 h-3.5" />
+                    <span>دخول المشرفين المعتمدين</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSupervisorMode('register');
+                      setSupervisorError('');
+                      setRegSupError('');
+                    }}
+                    className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                      supervisorMode === 'register'
+                        ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 shadow-md'
+                        : 'text-amber-400 hover:text-amber-300 hover:bg-slate-800/60'
+                    }`}
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-amber-950 fill-amber-950" />
+                    <span>تسجيل مشرف جديد ✨</span>
+                  </button>
+                </div>
+
+                {/* Sub-mode 1: Login */}
+                {supervisorMode === 'login' ? (
+                  <form onSubmit={handleSupervisorLogin} className="space-y-5 animate-in fade-in">
+                    <div className="p-3.5 bg-amber-950/40 border border-amber-500/30 rounded-2xl flex items-center gap-2.5 text-xs text-amber-200">
+                      <GraduationCap className="w-5 h-5 text-amber-400 shrink-0" />
+                      <div>
+                        <span className="font-bold block">بوابة اعتماد مشرفي الأندية الطلابية:</span>
+                        <span className="text-[11px] text-slate-300">يقوم المشرف بمراجعة طلبات وفعاليات الأندية المسندة إليه واعتمادها لتصل للموظفين التنفيذيين.</span>
+                      </div>
+                    </div>
+
+                    {supervisorError && (
+                      <div className="p-3.5 rounded-2xl bg-rose-950/70 border border-rose-500/60 text-rose-200 text-xs font-bold flex items-center gap-2 animate-in fade-in">
+                        <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                        <span>{supervisorError}</span>
+                      </div>
+                    )}
+
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-xs font-bold text-slate-200 block">
+                          اختر المشرف الأكاديمي/الطلابي:
+                        </label>
+                        <span className="text-[11px] text-slate-400">
+                          المشرفون المسجلون: <strong className="text-amber-400">{supervisorAccounts.length}</strong>
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-2.5 max-h-72 overflow-y-auto pr-1">
+                        {supervisorAccounts.map(sup => {
+                          const isSelected = selectedSupervisorId === sup.id;
+                          const supervised = sup.supervisedClubNames || [];
+                          return (
+                            <div
+                              key={sup.id}
+                              onClick={() => {
+                                setSelectedSupervisorId(sup.id);
+                                setSupervisorError('');
+                                setSupervisorPassword('');
+                              }}
+                              className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 ${
+                                isSelected
+                                  ? 'bg-amber-950/50 border-amber-500 ring-2 ring-amber-500/30'
+                                  : 'bg-slate-800/60 border-slate-700 hover:border-slate-500'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-600 to-orange-700 text-white flex items-center justify-center font-bold text-base shrink-0">
+                                  👨‍🏫
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <h4 className="text-sm font-bold text-white">{sup.name}</h4>
+                                    {sup.isCustom && (
+                                      <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                                        جديد
+                                      </span>
+                                    )}
+                                    {isSelected && (
+                                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 font-bold">
+                                        المشرف المختار
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-[11px] text-amber-300/90 mt-0.5">
+                                    {sup.title || 'مشرف نادي طلابي'} • {sup.department || 'إشراف الأندية الطلابية'}
+                                  </p>
+                                  {supervised.length > 0 && (
+                                    <p className="text-[10px] text-slate-400 mt-1">
+                                      الأندية المعتمدة: {supervised.join(' • ')}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Password Input for Supervisor */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                          <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+                          <span>كلمة مرور المشرف ({selectedSupervisorObj?.name || 'المشرف'}):</span>
+                        </label>
+                      </div>
+
+                      <div className="relative">
+                        <input
+                          type={showSupervisorPassword ? 'text' : 'password'}
+                          value={supervisorPassword}
+                          onChange={e => setSupervisorPassword(e.target.value)}
+                          placeholder="أدخل كلمة مرور المشرف..."
+                          className="w-full text-xs sm:text-sm p-3.5 pl-11 rounded-2xl bg-slate-800 border border-slate-700 text-white font-mono focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowSupervisorPassword(!showSupervisorPassword)}
+                          className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 p-1 cursor-pointer"
+                        >
+                          {showSupervisorPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-slate-950 font-bold text-sm shadow-xl shadow-amber-950/50 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98"
+                    >
+                      <UserCheck className="w-4 h-4" />
+                      <span>دخول لوحة اعتماد المشرف ({selectedSupervisorObj?.name})</span>
+                    </button>
+
+                    {/* Prompt to register supervisor */}
+                    <div className="text-center pt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSupervisorMode('register');
+                          setRegSupError('');
+                        }}
+                        className="text-xs text-amber-400 hover:text-amber-300 font-bold hover:underline inline-flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>لست مسجلاً بعد؟ اضغط هنا لإنشاء وتسجيل حساب مشرف جديد</span>
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  /* Sub-mode 2: Supervisor Registration Form */
+                  <form onSubmit={handleRegisterSupervisorSubmit} className="space-y-4 animate-in fade-in">
+                    <div className="p-3.5 bg-amber-950/40 border border-amber-500/30 rounded-2xl flex items-center gap-2.5 text-xs text-amber-200">
+                      <Sparkles className="w-5 h-5 text-amber-400 shrink-0" />
+                      <div>
+                        <span className="font-bold block">تسجيل حساب مشرف أكاديمي / طلابي جديد:</span>
+                        <span className="text-[11px] text-slate-300">يتم تفعيل الحساب مباشرة، ويظهر اسمك في قائمة المشرفين ليتمكن رؤساء الأندية من اختيارك للإشراف على أنديتهم.</span>
+                      </div>
+                    </div>
+
+                    {regSupError && (
+                      <div className="p-3.5 rounded-xl bg-rose-950/70 border border-rose-500 text-rose-200 text-xs font-bold flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                        <span>{regSupError}</span>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-bold text-slate-300 block mb-1">اسم المشرف الثلاثي:</label>
+                        <input
+                          type="text"
+                          value={regSupName}
+                          onChange={e => setRegSupName(e.target.value)}
+                          placeholder="مثال: د. محمد بن عبد الله الشمري"
+                          className="w-full text-xs sm:text-sm p-3 rounded-xl bg-slate-800 border border-slate-700 text-white focus:ring-2 focus:ring-amber-500 font-bold"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold text-slate-300 block mb-1">البريد الإلكتروني الجامعي:</label>
+                        <input
+                          type="email"
+                          value={regSupEmail}
+                          onChange={e => setRegSupEmail(e.target.value)}
+                          placeholder="example@kfupm.edu.sa"
+                          className="w-full text-xs sm:text-sm p-3 rounded-xl bg-slate-800 border border-slate-700 text-white focus:ring-2 focus:ring-amber-500 font-mono"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-bold text-slate-300 block mb-1">رقم الجوال للتواصل:</label>
+                        <input
+                          type="tel"
+                          value={regSupPhone}
+                          onChange={e => setRegSupPhone(e.target.value)}
+                          placeholder="05XXXXXXXX"
+                          className="w-full text-xs sm:text-sm p-3 rounded-xl bg-slate-800 border border-slate-700 text-white focus:ring-2 focus:ring-amber-500 font-mono"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold text-slate-300 block mb-1">مكتب المشرف / مبنى الكلية:</label>
+                        <input
+                          type="text"
+                          value={regSupOffice}
+                          onChange={e => setRegSupOffice(e.target.value)}
+                          placeholder="مثال: مبنى 22 - مكتب 315"
+                          className="w-full text-xs sm:text-sm p-3 rounded-xl bg-slate-800 border border-slate-700 text-white focus:ring-2 focus:ring-amber-500 font-semibold"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Passwords */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      <div>
+                        <label className="text-xs font-bold text-slate-300 block mb-1">تعيين كلمة مرور للمشرف:</label>
+                        <div className="relative">
+                          <input
+                            type={showRegSupPassword ? 'text' : 'password'}
+                            value={regSupPassword}
+                            onChange={e => setRegSupPassword(e.target.value)}
+                            placeholder="أدخل كلمة المرور للحساب..."
+                            className="w-full text-xs sm:text-sm p-3 pl-10 rounded-xl bg-slate-800 border border-slate-700 text-white font-mono focus:ring-2 focus:ring-amber-500"
+                            required
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowRegSupPassword(!showRegSupPassword)}
+                            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                          >
+                            {showRegSupPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold text-slate-300 block mb-1">تأكيد كلمة المرور:</label>
+                        <input
+                          type={showRegSupPassword ? 'text' : 'password'}
+                          value={regSupConfirmPassword}
+                          onChange={e => setRegSupConfirmPassword(e.target.value)}
+                          placeholder="أعد كتابة كلمة المرور..."
+                          className="w-full text-xs sm:text-sm p-3 rounded-xl bg-slate-800 border border-slate-700 text-white font-mono focus:ring-2 focus:ring-amber-500"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-300 block mb-1">نبذة أو اهتمامات إشرافية (اختياري):</label>
+                      <textarea
+                        value={regSupBio}
+                        onChange={e => setRegSupBio(e.target.value)}
+                        placeholder="مجالات الاهتمام الأكاديمي، الأنشطة الطلابية التي ترغب بالإشراف عليها..."
+                        rows={2}
+                        className="w-full text-xs p-3 rounded-xl bg-slate-800 border border-slate-700 text-white focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+
+                    <div className="pt-2 flex items-center gap-3">
+                      <button
+                        type="submit"
+                        className="flex-1 py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-bold text-sm shadow-xl shadow-amber-950/40 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98"
+                      >
+                        <Sparkles className="w-4 h-4 text-slate-950 fill-slate-950" />
+                        <span>تسجيل وتفعيل حساب المشرف فوراً</span>
+                      </button>
+                      
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSupervisorMode('login');
+                          setRegSupError('');
+                        }}
+                        className="py-3.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs cursor-pointer"
+                      >
+                        إلغاء والعودة للدخول
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            )}
+
+            {/* TAB 3: Register New Club President */}
             {activeTab === 'register_club' && (
               <form onSubmit={handleRegisterSubmit} className="space-y-4 animate-in fade-in">
                 <div className="p-3.5 bg-teal-950/50 border border-teal-500/30 rounded-2xl flex items-center gap-2.5 text-xs text-teal-200">
                   <Sparkles className="w-5 h-5 text-teal-400 shrink-0" />
                   <div>
                     <span className="font-bold block">تسجيل حساب نادٍ طلابي ورئيس نادٍ جديد مع كلمة مرور:</span>
-                    <span className="text-[11px] text-slate-300">يتم إنشاء الحساب واعتماده مباشرة لتقديم الطلبات وعزل البيانات.</span>
+                    <span className="text-[11px] text-slate-300">يتم إنشاء الحساب واعتماده مباشرة لتقديم الطلبات وعزل البيانات، مع إسناده لمشرف معتمد.</span>
                   </div>
                 </div>
 
@@ -445,7 +868,7 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
                     <div className="flex items-center justify-between mb-1">
                       <label className="text-xs font-bold text-slate-300 block">تصنيف النادي:</label>
                       {regCategory === 'custom' && (
-                        <span className="text-[10px] text-teal-400 font-bold">كتابة تصنيف يدوي</span>
+                        <span className="text-[10px] text-teal-400 font-bold">كتابة تصنيف يدوي مخصص</span>
                       )}
                     </div>
                     <select
@@ -464,7 +887,7 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
                       <option value="إعلامي وتواصلي">إعلامي وتواصلي</option>
                       <option value="صحي وبيئي">صحي وبيئي</option>
                       <option value="عام">عام</option>
-                      <option value="custom">✏️ أخرى (كتابة تصنيف مخصص غير موجود)...</option>
+                      <option value="custom">✏️ أخرى (كتابة تصنيف مخصص غير موجود بالقائمة)...</option>
                     </select>
 
                     {/* Custom Category Input when selected */}
@@ -474,7 +897,7 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
                           type="text"
                           value={customRegCategory}
                           onChange={e => setCustomRegCategory(e.target.value)}
-                          placeholder="اكتب تصنيف النادي المخصص (مثال: ألعاب إلكترونية / فضاء)..."
+                          placeholder="اكتب تصنيف النادي المخصص هنا..."
                           className="w-full text-xs sm:text-sm p-2.5 rounded-xl bg-slate-800/95 border border-teal-500 text-white focus:ring-2 focus:ring-teal-400 placeholder:text-slate-500 font-bold"
                           required
                           autoFocus
@@ -484,6 +907,43 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
                         </p>
                       </div>
                     )}
+                  </div>
+
+                  {/* Supervisor Selection Dropdown */}
+                  <div className="sm:col-span-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                        <GraduationCap className="w-4 h-4 text-amber-400" />
+                        <span>مشرف النادي الطلابي (لاعتماد الفعاليات والطلبات):</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveTab('supervisors');
+                          setSupervisorMode('register');
+                        }}
+                        className="text-[10px] text-amber-400 hover:text-amber-300 hover:underline font-bold cursor-pointer inline-flex items-center gap-1"
+                      >
+                        <Sparkles className="w-3 h-3" />
+                        <span>مشرفك غير مسجل؟ اضغط لإضافته</span>
+                      </button>
+                    </div>
+                    <select
+                      value={regSupervisorId}
+                      onChange={e => setRegSupervisorId(e.target.value)}
+                      className="w-full text-xs sm:text-sm p-3 rounded-xl bg-slate-800 border border-amber-500/60 text-white focus:ring-2 focus:ring-amber-500 font-semibold cursor-pointer"
+                      required
+                    >
+                      <option value="">-- اختر المشرف الأكاديمي المسند للنادي --</option>
+                      {supervisorAccounts.map(sup => (
+                        <option key={sup.id} value={sup.id}>
+                          👨‍🏫 {sup.name} ({sup.department || 'إشراف الأندية الطلابية'})
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      عند تقديم النادي لأي طلب فعالية، يُحال للمشرف المختار أولاً للاعتماد والموافقة قبل انتقال المهام للموظفين المختصين.
+                    </p>
                   </div>
 
                   <div>
@@ -588,7 +1048,7 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
               </form>
             )}
 
-            {/* TAB 3: Staff Members Login */}
+            {/* TAB 4: Staff Members Login */}
             {activeTab === 'staff' && (
               <form onSubmit={handleStaffLogin} className="space-y-4">
                 <div className="text-xs text-slate-300 mb-2 flex items-center justify-between">
@@ -675,15 +1135,15 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
                   className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white font-bold text-sm shadow-xl shadow-blue-950/50 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98"
                 >
                   <Lock className="w-4 h-4" />
-                  <span>تأكيد كلمة المرور ودخول الموظف</span>
+                  <span>دخول صندوق مهام الموظف ({selectedStaffObj?.shortName})</span>
                 </button>
               </form>
             )}
 
-            {/* TAB 4: Admin Supervision */}
+            {/* TAB 5: Admin Supervision */}
             {activeTab === 'admin' && (
               <form onSubmit={handleAdminLogin} className="space-y-5 text-center">
-                <div className="w-16 h-16 rounded-3xl bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center justify-center mx-auto text-2xl">
+                <div className={`w-16 h-16 rounded-3xl ${currentTheme.ambientGlowPrimary} ${currentTheme.adminAccentColor} border ${currentTheme.cardBorder} flex items-center justify-center mx-auto text-2xl shadow-lg`}>
                   👑
                 </div>
 
@@ -707,7 +1167,7 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
                 <div className="text-right max-w-md mx-auto">
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                      <KeyRound className="w-3.5 h-3.5 text-purple-400" />
+                      <KeyRound className={`w-3.5 h-3.5 ${currentTheme.adminAccentColor}`} />
                       <span>كلمة مرور إدارة النشاط:</span>
                     </label>
                   </div>
@@ -718,7 +1178,7 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
                       value={adminPassword}
                       onChange={e => setAdminPassword(e.target.value)}
                       placeholder="أدخل كلمة المرور..."
-                      className="w-full text-xs sm:text-sm p-3.5 pl-11 rounded-2xl bg-slate-800 border border-slate-700 text-white font-mono focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
+                      className="w-full text-xs sm:text-sm p-3.5 pl-11 rounded-2xl bg-slate-800 border border-slate-700 text-white font-mono focus:ring-2 focus:ring-teal-500 focus:outline-hidden"
                       required
                     />
                     <button
@@ -731,13 +1191,13 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
                   </div>
                 </div>
 
-                <div className="p-3.5 bg-purple-950/40 border border-purple-500/20 rounded-2xl text-xs text-purple-200 max-w-md mx-auto">
+                <div className={`p-3.5 ${currentTheme.adminBadgeBg} rounded-2xl text-xs max-w-md mx-auto`}>
                   صلاحيات كاملة للاطلاع الإشرافي على كافة الأندية والموظفين وتعديل البيانات.
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full max-w-md mx-auto py-3.5 px-4 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-700 hover:from-purple-700 hover:to-indigo-800 text-white font-bold text-sm shadow-xl shadow-purple-950/50 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98"
+                  className={`w-full max-w-md mx-auto py-3.5 px-4 rounded-2xl bg-gradient-to-r ${currentTheme.adminButtonBg} text-white font-bold text-sm shadow-xl flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98`}
                 >
                   <ShieldCheck className="w-4 h-4" />
                   <span>تأكيد كلمة المرور والدخول للإشراف العام</span>
@@ -746,16 +1206,15 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
             )}
 
           </div>
-
         </div>
 
+        {/* System Footnote */}
+        <div className="text-center mt-6 text-xs text-slate-300">
+          <p>عمادة شؤون الطلاب • جامعة الملك فهد للبترول والمعادن (KFUPM) • 2026</p>
+        </div>
       </div>
 
-      {/* Footer */}
-      <div className="text-center text-xs text-slate-500 py-3 z-10">
-        © 2026 عمادة شؤون الطلاب • نظام إدارة طلبات الأندية والمهام اللوجستية المحمي
-      </div>
-
+      <div />
     </div>
   );
 };

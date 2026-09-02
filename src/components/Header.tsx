@@ -64,6 +64,16 @@ export const Header: React.FC<HeaderProps> = ({
         icon: '🎓',
       };
     }
+    if (currentUser?.role === 'club_supervisor') {
+      return {
+        badgeTitle: 'مشرف الأندية الطلابية',
+        entityTitle: currentUser.department || 'إشراف الأندية',
+        userName: currentUser.name,
+        badgeBg: 'bg-amber-50 text-amber-800 border-amber-200',
+        dotClass: 'bg-amber-500',
+        icon: '👨‍🏫',
+      };
+    }
     if (currentUser?.role === 'admin') {
       return {
         badgeTitle: 'المشرف العام',

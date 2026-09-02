@@ -17,7 +17,11 @@ import {
   CloudCheck,
   CloudOff,
   RefreshCw,
-  RotateCcw
+  RotateCcw,
+  Palette,
+  GraduationCap,
+  ShieldCheck,
+  UserPlus
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { STAFF_MEMBERS, DEPARTMENTS } from '../data/initialData';
@@ -25,6 +29,8 @@ import { ClubRequest, Task } from '../types';
 import { DeleteConfirmationModal } from './DeleteConfirmationModal';
 import { ClearAllRequestsModal } from './ClearAllRequestsModal';
 import { CloudSyncIndicator } from './CloudSyncIndicator';
+import { PortalThemeSelector } from './PortalThemeSelector';
+import { getPortalTheme } from '../data/portalThemes';
 
 interface Props {
   onOpenRequestDetails: (requestId: string) => void;
@@ -39,10 +45,22 @@ export const AdminOverviewView: React.FC<Props> = ({ onOpenRequestDetails }) => 
     cloudSyncStatus,
     lastSyncTime,
     staffMembers,
-    currentAcademicYear
+    userAccounts,
+    deleteSupervisorAccount,
+    deleteClubAccount,
+    currentAcademicYear,
+    portalTheme,
+    setPortalTheme
   } = useApp();
   const [deletingTarget, setDeletingTarget] = useState<{ task?: Task; request: ClubRequest } | null>(null);
   const [isClearAllModalOpen, setIsClearAllModalOpen] = useState(false);
+  const [isPortalThemeModalOpen, setIsPortalThemeModalOpen] = useState(false);
+  const [supervisorNotice, setSupervisorNotice] = useState<string | null>(null);
+
+  const supervisorsList = userAccounts.filter(u => u.role === 'club_supervisor');
+  const clubsListAccounts = userAccounts.filter(u => u.role === 'club_president');
+
+  const currentThemeObj = getPortalTheme(portalTheme);
 
   const totalRequests = requests.length;
   const completedRequests = requests.filter(r => r.status === 'completed').length;
@@ -120,6 +138,28 @@ export const AdminOverviewView: React.FC<Props> = ({ onOpenRequestDetails }) => 
                   {cloudSyncStatus === 'synced' && (
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                   )}
+                </span>
+              </div>
+            </button>
+
+            {/* Portal Theme Selector for Admin */}
+            <button
+              id="btn-admin-portal-theme"
+              onClick={() => setIsPortalThemeModalOpen(true)}
+              className="bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-400/40 text-white px-4 py-2.5 rounded-2xl backdrop-blur-md transition-all flex items-center gap-3 text-xs font-bold shadow-md cursor-pointer group hover:scale-[1.02]"
+              title="تخصيص ثيم وألوان بوابة تسجيل الدخول الرئيسية"
+            >
+              <div className="w-9 h-9 rounded-xl bg-indigo-500/40 flex items-center justify-center text-indigo-200 border border-indigo-300/40 group-hover:scale-110 transition-transform">
+                <Palette className="w-5 h-5 text-indigo-200" />
+              </div>
+              <div className="text-right">
+                <span className="block text-[10px] text-indigo-200 font-medium">ألوان بوابة الدخول</span>
+                <span className="text-xs text-white font-bold flex items-center gap-1.5">
+                  <span>{currentThemeObj.name}</span>
+                  <span 
+                    className="w-2.5 h-2.5 rounded-full border border-white/40 shadow-xs" 
+                    style={{ backgroundColor: currentThemeObj.swatchColors[0] }} 
+                  />
                 </span>
               </div>
             </button>
@@ -239,6 +279,129 @@ export const AdminOverviewView: React.FC<Props> = ({ onOpenRequestDetails }) => 
         </div>
       </div>
 
+      {/* Supervisors Registry & Club Oversight Card */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="p-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <GraduationCap className="w-5 h-5 text-amber-600" />
+            <div>
+              <h3 className="text-base font-bold text-slate-900">
+                مشرفو الأندية الطلابية المعتمدون ({supervisorsList.length} مشرفين)
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                متابعة هيئة الإشراف الأكاديمي، الأندية المسندة لكل مشرف، وحالات اعتماد الطلبات
+              </p>
+            </div>
+          </div>
+          <span className="text-xs font-bold text-amber-800 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200">
+            👨‍🏫 خطوة الاعتماد الأولى للطلبات
+          </span>
+        </div>
+
+        {supervisorNotice && (
+          <div className="mx-5 mt-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-xl flex items-center justify-between">
+            <span>{supervisorNotice}</span>
+            <button
+              onClick={() => setSupervisorNotice(null)}
+              className="text-slate-400 hover:text-slate-600 cursor-pointer"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
+        <div className="p-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {supervisorsList.map(sup => {
+            const supervisedClubs = sup.supervisedClubNames || [];
+            const matchingRequests = requests.filter(r => supervisedClubs.includes(r.clubName) || r.supervisorId === sup.id);
+            const pendingSupReqs = matchingRequests.filter(r => r.status === 'pending_supervisor').length;
+
+            return (
+              <div 
+                key={sup.id}
+                className="p-4 rounded-2xl bg-gradient-to-br from-slate-50 to-amber-50/30 border border-slate-200 hover:border-amber-300 transition-all flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-600 to-orange-700 text-white flex items-center justify-center font-bold text-base shrink-0 shadow-sm">
+                        👨‍🏫
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-900">{sup.name}</h4>
+                        <span className="text-[11px] text-amber-700 font-semibold block">
+                          {sup.title || 'مشرف نادي'} • {sup.department || 'إشراف الأندية'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {sup.isCustom && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm(`هل أنت متأكد من حذف حساب المشرف (${sup.name})؟`)) {
+                            const res = deleteSupervisorAccount(sup.id);
+                            if (res.success) {
+                              setSupervisorNotice(res.message);
+                            }
+                          }
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                        title="حذف هذا المشرف"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="mt-3 pt-2.5 border-t border-slate-100 text-xs space-y-1 text-slate-600">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-slate-500">البريد:</span>
+                      <span className="font-mono text-[11px] text-slate-800">{sup.email}</span>
+                    </div>
+                    {sup.phone && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-slate-500">الجوال:</span>
+                        <span className="font-mono text-[11px] text-slate-800">{sup.phone}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Supervised Clubs Badges */}
+                  <div className="mt-3">
+                    <span className="text-[11px] font-bold text-slate-700 block mb-1">
+                      الأندية تحت الإشراف:
+                    </span>
+                    {supervisedClubs.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {supervisedClubs.map(cName => (
+                          <span key={cName} className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-white border border-amber-200 text-amber-900 shadow-2xs">
+                            🎓 {cName.replace('نادي ', '')}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 italic">
+                        متاح للإشراف على أندية جديدة
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-2.5 border-t border-slate-200 flex items-center justify-between text-xs">
+                  <span className="text-[11px] text-slate-500">طلبات بانتظار الاعتماد:</span>
+                  <span className={`font-bold px-2 py-0.5 rounded-full text-[10px] ${
+                    pendingSupReqs > 0 ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    {pendingSupReqs} طلبات
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Full Requests Registry Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="p-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
@@ -345,6 +508,13 @@ export const AdminOverviewView: React.FC<Props> = ({ onOpenRequestDetails }) => 
       <ClearAllRequestsModal
         isOpen={isClearAllModalOpen}
         onClose={() => setIsClearAllModalOpen(false)}
+      />
+
+      <PortalThemeSelector
+        isOpen={isPortalThemeModalOpen}
+        onClose={() => setIsPortalThemeModalOpen(false)}
+        currentThemeId={portalTheme}
+        onSelectTheme={setPortalTheme}
       />
 
     </div>

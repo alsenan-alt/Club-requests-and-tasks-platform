@@ -1,5 +1,6 @@
 export type RoleType = 
   | 'club_president'
+  | 'club_supervisor'
   | 'staff_hussein'
   | 'staff_mousa'
   | 'staff_musleh'
@@ -11,7 +12,11 @@ export interface UserAccount {
   name: string;
   role: RoleType;
   clubName?: string;
+  supervisorId?: string;
+  supervisorName?: string;
+  supervisedClubNames?: string[];
   staffId?: string;
+  department?: string;
   title: string;
   email: string;
   phone?: string;
@@ -34,6 +39,7 @@ export type TaskStatus =
   | 'needs_info';
 
 export type RequestStatus = 
+  | 'pending_supervisor'
   | 'submitted'
   | 'in_progress'
   | 'completed'
@@ -142,6 +148,11 @@ export interface ClubRequest {
   presidentName: string;
   presidentPhone: string;
   presidentEmail: string;
+  supervisorId?: string;
+  supervisorName?: string;
+  supervisorApprovalDate?: string;
+  supervisorNotes?: string;
+  supervisorStatus?: 'pending' | 'approved' | 'rejected' | 'needs_info';
   eventTitle: string;
   eventType: 'workshop' | 'hackathon' | 'exhibition' | 'lecture' | 'sports' | 'trip' | 'other';
   eventDate: string;
