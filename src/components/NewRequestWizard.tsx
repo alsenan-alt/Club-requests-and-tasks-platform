@@ -6,9 +6,6 @@ import {
   Check, 
   Sparkles, 
   Building2, 
-  Calendar, 
-  Clock, 
-  Users, 
   Bus, 
   Armchair, 
   Zap, 
@@ -20,9 +17,7 @@ import {
   ShieldCheck, 
   Utensils, 
   Send,
-  AlertCircle,
-  Globe,
-  ExternalLink
+  Globe
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { DEPARTMENTS, STAFF_MEMBERS, CLUBS_LIST } from '../data/initialData';
@@ -43,7 +38,15 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
     services,
     createNewRequest, 
     setSelectedRequestId,
-    staffMembers
+    staffMembers,
+    t,
+    tService,
+    tDepartment,
+    tField,
+    tOption,
+    tUnit,
+    tDynamic,
+    isRtl
   } = useApp();
 
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
@@ -51,7 +54,7 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
   // Step 1 Form Data
   const [formData, setFormData] = useState({
     clubName: currentUser?.clubName || activeClubName || CLUBS_LIST[0],
-    presidentName: currentUser?.name || 'رئيس النادي الطلابي',
+    presidentName: currentUser?.name || (isRtl ? 'رئيس النادي الطلابي' : 'Club President'),
     presidentPhone: currentUser?.phone || '0551122334',
     presidentEmail: currentUser?.email || 'club.president@student.kfupm.edu.sa',
     eventTitle: '',
@@ -59,7 +62,7 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
     eventDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     startTime: '17:00',
     endTime: '21:00',
-    locationSummary: 'مبنى 70 - البهو الرئيسي',
+    locationSummary: isRtl ? 'مبنى 70 - البهو الرئيسي' : 'Bldg 70 - Main Atrium',
     expectedAttendees: 75,
     description: '',
     budget: '',
@@ -181,11 +184,11 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.eventTitle.trim()) {
-      alert('يرجى كتابة عنوان الفعالية');
+      alert(isRtl ? 'يرجى كتابة عنوان الفعالية' : 'Please enter event title');
       return;
     }
     if (selectedServiceIds.length === 0) {
-      alert('يرجى اختيار خدمة واحدة على الأقل');
+      alert(isRtl ? 'يرجى اختيار خدمة واحدة على الأقل' : 'Please select at least one service');
       return;
     }
 
@@ -208,10 +211,10 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
             <div>
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-semibold mb-2 border border-emerald-400/30">
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>معالج تقديم طلب فعالية وتوجيه المهام</span>
+                <span>{t('wizard.title', 'معالج تقديم طلب فعالية وتوجيه المهام')}</span>
               </div>
               <h2 className="text-xl sm:text-2xl font-bold font-['Tajawal',sans-serif]">
-                طلب فعالية جديدة مع التوزيع الآلي للمهام
+                {t('wizard.heading', 'طلب فعالية جديدة مع التوزيع الآلي للمهام')}
               </h2>
             </div>
 
@@ -234,7 +237,7 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
               }`}>
                 {currentStep > 1 ? <Check className="w-3.5 h-3.5" /> : '1'}
               </div>
-              <span>بيانات الفعالية</span>
+              <span>{t('wizard.step1', '1. بيانات الفعالية')}</span>
             </div>
 
             <div className={`flex flex-col items-center gap-1 pb-2 border-b-2 transition-all ${
@@ -245,7 +248,7 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
               }`}>
                 {currentStep > 2 ? <Check className="w-3.5 h-3.5" /> : '2'}
               </div>
-              <span>اختيار الخدمات</span>
+              <span>{t('wizard.step2', '2. اختيار الخدمات')}</span>
             </div>
 
             <div className={`flex flex-col items-center gap-1 pb-2 border-b-2 transition-all ${
@@ -256,7 +259,7 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
               }`}>
                 {currentStep > 3 ? <Check className="w-3.5 h-3.5" /> : '3'}
               </div>
-              <span>تفاصيل الخدمات</span>
+              <span>{t('wizard.step3', '3. تفاصيل الخدمات')}</span>
             </div>
 
             <div className={`flex flex-col items-center gap-1 pb-2 border-b-2 transition-all ${
@@ -267,7 +270,7 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
               }`}>
                 4
               </div>
-              <span>معاينة التوجيه والاعتماد</span>
+              <span>{t('wizard.step4', '4. معاينة التوجيه والاعتماد')}</span>
             </div>
 
           </div>
@@ -282,19 +285,21 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
               <div className="p-4 bg-emerald-50/80 border border-emerald-200 rounded-2xl flex items-start gap-3">
                 <Sparkles className="w-5 h-5 text-emerald-600 mt-0.5 shrink-0" />
                 <div className="text-xs text-emerald-950">
-                  <span className="font-bold">المرحلة الأولى:</span> قم بتعبئة بيانات الفعالية الأساسية. في الخطوة التالية، ستتمكن من تحديد الخدمات المطلوبة ليقوم النظام بتوجيهها آلياً للموظفين المعنيين (أ. حسين رمضان، أ. موسى آل سنان، أ. مصلح الشمراني).
+                  <span className="font-bold">{isRtl ? 'المرحلة الأولى:' : 'Step 1:'}</span> {t('wizard.step1_tip')}
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    اسم النادي الطلابي مقدم الطلب <span className="text-rose-500">*</span>
+                    {t('wizard.club_name', 'اسم النادي الطلابي مقدم الطلب')} <span className="text-rose-500">*</span>
                   </label>
                   {currentRole === 'club_president' && currentUser?.clubName ? (
                     <div className="w-full text-xs font-bold p-2.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 flex items-center justify-between">
                       <span>{currentUser.clubName}</span>
-                      <span className="text-[10px] bg-emerald-200/80 px-2 py-0.5 rounded-md text-emerald-800">حساب موثق ومقفل</span>
+                      <span className="text-[10px] bg-emerald-200/80 px-2 py-0.5 rounded-md text-emerald-800">
+                        {isRtl ? 'حساب موثق ومقفل' : 'Verified & Locked'}
+                      </span>
                     </div>
                   ) : (
                     <select
@@ -311,39 +316,41 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    اسم رئيس النادي / المفوض بالطلب <span className="text-rose-500">*</span>
+                    {t('wizard.president_name', 'اسم رئيس النادي / المفوض بالطلب')} <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
                     value={formData.presidentName}
                     onChange={e => setFormData({ ...formData, presidentName: e.target.value })}
                     className="w-full text-xs p-2.5 rounded-xl bg-white border border-slate-300 text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
-                    placeholder="الاسم الكامل"
+                    placeholder={isRtl ? 'الاسم الكامل' : 'Full Name'}
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    رقم الجوال للتواصل والمتابعة <span className="text-rose-500">*</span>
+                    {t('wizard.phone', 'رقم الجوال للتواصل والمتابعة')} <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="tel"
                     value={formData.presidentPhone}
                     onChange={e => setFormData({ ...formData, presidentPhone: e.target.value })}
-                    className="w-full text-xs p-2.5 rounded-xl bg-white border border-slate-300 text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-left dir-ltr"
+                    className="w-full text-xs p-2.5 rounded-xl bg-white border border-slate-300 text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-left"
+                    dir="ltr"
                     placeholder="05xxxxxxxx"
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    البريد الإلكتروني الجامعي <span className="text-rose-500">*</span>
+                    {t('wizard.email', 'البريد الإلكتروني الجامعي')} <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="email"
                     value={formData.presidentEmail}
                     onChange={e => setFormData({ ...formData, presidentEmail: e.target.value })}
-                    className="w-full text-xs p-2.5 rounded-xl bg-white border border-slate-300 text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-left dir-ltr"
+                    className="w-full text-xs p-2.5 rounded-xl bg-white border border-slate-300 text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-left"
+                    dir="ltr"
                     placeholder="student@kfupm.edu.sa"
                   />
                 </div>
@@ -351,40 +358,40 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
 
               <div className="border-t border-slate-200 pt-4">
                 <label className="block text-xs font-bold text-slate-800 mb-1">
-                  عنوان الفعالية البارز <span className="text-rose-500">*</span>
+                  {t('wizard.event_title', 'عنوان الفعالية البارز')} <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.eventTitle}
                   onChange={e => setFormData({ ...formData, eventTitle: e.target.value })}
                   className="w-full text-sm font-bold p-3 rounded-xl bg-white border border-slate-300 text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
-                  placeholder="مثال: منتدى الابتكار وريادة الأعمال 2026"
+                  placeholder={isRtl ? 'مثال: منتدى الابتكار وريادة الأعمال 2026' : 'e.g., Innovation & Entrepreneurship Forum 2026'}
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    نوع الفعالية
+                    {t('wizard.event_type', 'نوع الفعالية')}
                   </label>
                   <select
                     value={formData.eventType}
                     onChange={e => setFormData({ ...formData, eventType: e.target.value as any })}
                     className="w-full text-xs p-2.5 rounded-xl bg-white border border-slate-300 text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
                   >
-                    <option value="hackathon">هاكاثون ومنافسة برمجية</option>
-                    <option value="workshop">ورشة عمل تدريبية</option>
-                    <option value="exhibition">معرض مفتوح</option>
-                    <option value="lecture">محاضرة وندوة علمية</option>
-                    <option value="sports">بطولة رياضية</option>
-                    <option value="trip">رحلة ميدانية وزيارة</option>
-                    <option value="other">فعالية أخرى</option>
+                    <option value="hackathon">{tOption('hackathon')}</option>
+                    <option value="workshop">{tOption('workshop')}</option>
+                    <option value="exhibition">{tOption('exhibition')}</option>
+                    <option value="lecture">{tOption('lecture')}</option>
+                    <option value="sports">{tOption('sports')}</option>
+                    <option value="trip">{tOption('trip')}</option>
+                    <option value="other">{tOption('other')}</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    تاريخ الفعالية <span className="text-rose-500">*</span>
+                    {t('wizard.event_date', 'تاريخ الفعالية')} <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="date"
@@ -396,7 +403,7 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    العدد المتوقع للمشاركين
+                    {t('wizard.attendees', 'العدد المتوقع للمشاركين')}
                   </label>
                   <input
                     type="number"
@@ -410,7 +417,7 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    وقت البدء والانتهاء
+                    {t('wizard.start_end_time', 'وقت البدء والانتهاء')}
                   </label>
                   <div className="grid grid-cols-2 gap-2">
                     <input
@@ -430,28 +437,28 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    المقر المقترح للفعالية
+                    {t('wizard.location', 'المقر المقترح للفعالية')}
                   </label>
                   <input
                     type="text"
                     value={formData.locationSummary}
                     onChange={e => setFormData({ ...formData, locationSummary: e.target.value })}
                     className="w-full text-xs p-2.5 rounded-xl bg-white border border-slate-300 text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
-                    placeholder="مثال: مبنى 70 - البهو الرئيسي"
+                    placeholder={isRtl ? 'مثال: مبنى 70 - البهو الرئيسي' : 'e.g., Bldg 70 - Main Atrium'}
                   />
                 </div>
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  نبذة ووصف الفعالية والأهداف
+                  {t('wizard.description', 'نبذة ووصف الفعالية والأهداف')}
                 </label>
                 <textarea
                   rows={3}
                   value={formData.description}
                   onChange={e => setFormData({ ...formData, description: e.target.value })}
                   className="w-full text-xs p-2.5 rounded-xl bg-white border border-slate-300 text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
-                  placeholder="اكتب نبذة مختصرة عن الفعالية، الفئات المستهدفة، والمخرجات المرجوة..."
+                  placeholder={t('wizard.description_placeholder')}
                 />
               </div>
             </div>
@@ -463,7 +470,7 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
               <div className="p-4 bg-blue-50/80 border border-blue-200 rounded-2xl flex items-start gap-3">
                 <Sparkles className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
                 <div className="text-xs text-blue-950">
-                  <span className="font-bold">المرحلة الثانية:</span> اختر الخدمات والتجهيزات التي تحتاجها فعاليتك. يوضح كل قسم اسم الموظف المسؤول الذي ستوجه إليه المهمة تلقائياً.
+                  <span className="font-bold">{isRtl ? 'المرحلة الثانية:' : 'Step 2:'}</span> {t('wizard.step2_tip')}
                 </div>
               </div>
 
@@ -475,12 +482,12 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
                       1
                     </div>
                     <div>
-                      <h3 className="text-sm font-bold text-slate-900">الأستاذ حسين رمضان</h3>
-                      <p className="text-[11px] text-slate-500">مسؤول الحركة • الإسكان • الكهرباء • تقنية المعلومات IT • حجز المباني</p>
+                      <h3 className="text-sm font-bold text-slate-900">{t('staff.hussein', 'الأستاذ حسين رمضان')}</h3>
+                      <p className="text-[11px] text-slate-500">{t('staff.hussein_role')}</p>
                     </div>
                   </div>
                   <span className="text-[11px] font-semibold px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-full">
-                    5 إدارات معتمدة
+                    {isRtl ? '5 إدارات معتمدة' : '5 Authorized Depts'}
                   </span>
                 </div>
 
@@ -488,6 +495,8 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
                   {services.filter(s => s.staffId === 'hussein_ramadan').map(srv => {
                     const isSelected = selectedServiceIds.includes(srv.id);
                     const dept = DEPARTMENTS[srv.departmentId];
+                    const localizedSrv = tService(srv.id, srv.name, srv.description);
+                    const localizedDept = dept ? tDepartment(dept.id, dept.name, dept.description) : { name: '', description: '' };
 
                     return (
                       <div
@@ -507,13 +516,13 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
 
                         <div className="flex-1">
                           <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-slate-900">{srv.name}</span>
-                            <span className={`text-[10px] px-2 py-0.5 rounded-md font-semibold ${dept.badgeBg}`}>
-                              {dept.name}
+                            <span className="text-xs font-bold text-slate-900">{localizedSrv.name}</span>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-md font-semibold ${dept?.badgeBg || 'bg-blue-100 text-blue-800'}`}>
+                              {localizedDept.name}
                             </span>
                           </div>
                           <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-                            {srv.description}
+                            {localizedSrv.description}
                           </p>
                         </div>
                       </div>
@@ -530,12 +539,12 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
                       2
                     </div>
                     <div>
-                      <h3 className="text-sm font-bold text-slate-900">الأستاذ موسى آل سنان</h3>
-                      <p className="text-[11px] text-slate-500">مسؤول حجز القاعات • إعلان الفعاليات • المطابع والشهادات • العلاقات العامة</p>
+                      <h3 className="text-sm font-bold text-slate-900">{t('staff.mousa', 'الأستاذ موسى آل سنان')}</h3>
+                      <p className="text-[11px] text-slate-500">{t('staff.mousa_role')}</p>
                     </div>
                   </div>
                   <span className="text-[11px] font-semibold px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full">
-                    4 إدارات معتمدة
+                    {isRtl ? '4 إدارات معتمدة' : '4 Authorized Depts'}
                   </span>
                 </div>
 
@@ -543,6 +552,8 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
                   {services.filter(s => s.staffId === 'mousa_alsinan').map(srv => {
                     const isSelected = selectedServiceIds.includes(srv.id);
                     const dept = DEPARTMENTS[srv.departmentId];
+                    const localizedSrv = tService(srv.id, srv.name, srv.description);
+                    const localizedDept = dept ? tDepartment(dept.id, dept.name, dept.description) : { name: '', description: '' };
 
                     return (
                       <div
@@ -562,13 +573,13 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
 
                         <div className="flex-1">
                           <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-slate-900">{srv.name}</span>
-                            <span className={`text-[10px] px-2 py-0.5 rounded-md font-semibold ${dept.badgeBg}`}>
-                              {dept.name}
+                            <span className="text-xs font-bold text-slate-900">{localizedSrv.name}</span>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-md font-semibold ${dept?.badgeBg || 'bg-emerald-100 text-emerald-800'}`}>
+                              {localizedDept.name}
                             </span>
                           </div>
                           <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-                            {srv.description}
+                            {localizedSrv.description}
                           </p>
                         </div>
                       </div>
@@ -585,12 +596,12 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
                       3
                     </div>
                     <div>
-                      <h3 className="text-sm font-bold text-slate-900">الأستاذ مصلح الشمراني</h3>
-                      <p className="text-[11px] text-slate-500">مسؤول قسم الأمن وتصاريح الدخول • الخدمات الغذائية والضيافة</p>
+                      <h3 className="text-sm font-bold text-slate-900">{t('staff.musleh', 'الأستاذ مصلح الشمراني')}</h3>
+                      <p className="text-[11px] text-slate-500">{t('staff.musleh_role')}</p>
                     </div>
                   </div>
                   <span className="text-[11px] font-semibold px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-full">
-                    الأمن والسلامة
+                    {isRtl ? 'الأمن والسلامة' : 'Security & Safety'}
                   </span>
                 </div>
 
@@ -598,6 +609,8 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
                   {services.filter(s => s.staffId === 'musleh_alshamrani').map(srv => {
                     const isSelected = selectedServiceIds.includes(srv.id);
                     const dept = DEPARTMENTS[srv.departmentId];
+                    const localizedSrv = tService(srv.id, srv.name, srv.description);
+                    const localizedDept = dept ? tDepartment(dept.id, dept.name, dept.description) : { name: '', description: '' };
 
                     return (
                       <div
@@ -617,17 +630,17 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
 
                         <div className="flex-1">
                           <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-slate-900">{srv.name}</span>
-                            <span className={`text-[10px] px-2 py-0.5 rounded-md font-semibold ${dept.badgeBg}`}>
-                              {dept.name}
+                            <span className="text-xs font-bold text-slate-900">{localizedSrv.name}</span>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-md font-semibold ${dept?.badgeBg || 'bg-amber-100 text-amber-800'}`}>
+                              {localizedDept.name}
                             </span>
                           </div>
                           <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-                            {srv.description}
+                            {localizedSrv.description}
                           </p>
                           {srv.restrictedToVip && (
                             <span className="inline-block text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded mt-1.5">
-                              ⚠️ خاص بالفعاليات الرسمية أو إدارة النشاط
+                              {isRtl ? '⚠️ خاص بالفعاليات الرسمية أو إدارة النشاط' : '⚠️ Official events & management only'}
                             </span>
                           )}
                         </div>
@@ -638,9 +651,17 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
               </div>
 
               <div className="p-3 bg-slate-100 rounded-xl text-xs text-slate-600 flex items-center justify-between">
-                <span>تم تحديد <strong className="text-emerald-700">{selectedServiceIds.length}</strong> خدمات مطلوبة للفعالية</span>
+                <span>
+                  {isRtl ? (
+                    <>تم تحديد <strong className="text-emerald-700">{selectedServiceIds.length}</strong> خدمات مطلوبة للفعالية</>
+                  ) : (
+                    <><strong className="text-emerald-700">{selectedServiceIds.length}</strong> services selected for the event</>
+                  )}
+                </span>
                 {selectedServiceIds.length === 0 && (
-                  <span className="text-rose-600 font-bold">يرجى تحديد خدمة واحدة على الأقل للمتابعة</span>
+                  <span className="text-rose-600 font-bold">
+                    {isRtl ? 'يرجى تحديد خدمة واحدة على الأقل للمتابعة' : 'Please select at least one service to proceed'}
+                  </span>
                 )}
               </div>
             </div>
@@ -652,7 +673,7 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
               <div className="p-4 bg-emerald-50/80 border border-emerald-200 rounded-2xl flex items-start gap-3">
                 <Sparkles className="w-5 h-5 text-emerald-600 mt-0.5 shrink-0" />
                 <div className="text-xs text-emerald-950">
-                  <span className="font-bold">المرحلة الثالثة:</span> تفاصيل المتطلبات لكل خدمة. املأ الأعداد والمواصفات الدقيقة لتمكين الموظفين من تجهيزها بسرعة وبدقة.
+                  <span className="font-bold">{isRtl ? 'المرحلة الثالثة:' : 'Step 3:'}</span> {t('wizard.step3_tip')}
                 </div>
               </div>
 
@@ -662,6 +683,8 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
                 const dept = DEPARTMENTS[srv.departmentId];
                 const staff = staffMembers.find(sm => sm.id === srv.staffId) || STAFF_MEMBERS.find(sm => sm.id === srv.staffId);
                 const currentData = servicesData[serviceId] || { serviceId, priority: 'normal', details: {} };
+                const localizedSrv = tService(srv.id, srv.name, srv.description);
+                const localizedDept = dept ? tDepartment(dept.id, dept.name, dept.description) : { name: '', description: '' };
 
                 return (
                   <div key={srv.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
@@ -672,24 +695,24 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
                           {getServiceIcon(srv.iconName)}
                         </div>
                         <div>
-                          <h4 className="text-sm font-bold text-slate-900">{srv.name}</h4>
+                          <h4 className="text-sm font-bold text-slate-900">{localizedSrv.name}</h4>
                           <span className="text-[11px] text-slate-500">
-                            موجه تلقائياً إلى: <strong className="text-slate-800">{staff?.shortName}</strong> ({dept.name})
+                            {t('quick.direct_routing', 'موجه تلقائياً إلى:')} <strong className="text-slate-800">{tDynamic(staff?.shortName)}</strong> ({localizedDept.name})
                           </span>
                         </div>
                       </div>
 
                       {/* Priority selector */}
                       <div className="flex items-center gap-2">
-                        <label className="text-[11px] font-bold text-slate-600">أولوية المهمة:</label>
+                        <label className="text-[11px] font-bold text-slate-600">{t('table.priority', 'الأولوية:')}:</label>
                         <select
                           value={currentData.priority}
                           onChange={e => handlePriorityChange(srv.id, e.target.value as any)}
                           className="text-xs p-1.5 rounded-lg border border-slate-300 bg-white font-semibold focus:ring-2 focus:ring-emerald-500"
                         >
-                          <option value="normal">عادية</option>
-                          <option value="high">عالية الأهمية</option>
-                          <option value="urgent">عاجلة جداً</option>
+                          <option value="normal">{t('priority.normal', 'عادية')}</option>
+                          <option value="high">{t('priority.high', 'عالية الأهمية')}</option>
+                          <option value="urgent">{t('priority.urgent', 'عاجلة جداً')}</option>
                         </select>
                       </div>
                     </div>
@@ -704,7 +727,7 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
                             clubName={formData.clubName}
                             eventDate={formData.eventDate}
                             eventTime={`${formData.startTime} - ${formData.endTime}`}
-                            location={formData.locationSummary || formData.location}
+                            location={formData.locationSummary}
                             onChange={(newGuests) => {
                               handleFieldChange(srv.id, 'guestsList', newGuests);
                               handleFieldChange(srv.id, 'visitor_count', newGuests.length);
@@ -718,12 +741,15 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
                           .filter(field => !(srv.id === 'srv_security_permits' && (field.id === 'visitor_details' || field.id === 'visitor_count')))
                           .map(field => {
                           const val = currentData.details?.[field.id] ?? field.defaultValue ?? '';
+                          const fieldLabel = tField(field.id, field.label);
+                          const fieldUnit = tUnit(field.unit);
+                          const placeholder = field.placeholder ? tDynamic(field.placeholder) : '';
 
                           if (field.type === 'select') {
                             return (
                               <div key={field.id}>
                                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                                  {field.label} {field.required && <span className="text-rose-500">*</span>}
+                                  {fieldLabel} {field.required && <span className="text-rose-500">*</span>}
                                 </label>
                                 <select
                                   value={val}
@@ -731,7 +757,7 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
                                   className="w-full text-xs p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500"
                                 >
                                   {field.options?.map(opt => (
-                                    <option key={opt} value={opt}>{opt}</option>
+                                    <option key={opt} value={opt}>{tOption(opt)}</option>
                                   ))}
                                 </select>
                               </div>
@@ -742,13 +768,13 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
                             return (
                               <div key={field.id} className="sm:col-span-2">
                                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                                  {field.label} {field.required && <span className="text-rose-500">*</span>}
+                                  {fieldLabel} {field.required && <span className="text-rose-500">*</span>}
                                 </label>
                                 <textarea
                                   rows={2}
                                   value={val}
                                   onChange={e => handleFieldChange(srv.id, field.id, e.target.value)}
-                                  placeholder={field.placeholder}
+                                  placeholder={placeholder}
                                   className="w-full text-xs p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500"
                                 />
                               </div>
@@ -766,7 +792,7 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
                                   className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500"
                                 />
                                 <label htmlFor={`chk-${srv.id}-${field.id}`} className="text-xs font-semibold text-slate-800 cursor-pointer">
-                                  {field.label}
+                                  {fieldLabel}
                                 </label>
                               </div>
                             );
@@ -776,19 +802,19 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
                             return (
                               <div key={field.id} className="sm:col-span-2">
                                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                                  {field.label} {field.required && <span className="text-rose-500">*</span>}
+                                  {fieldLabel} {field.required && <span className="text-rose-500">*</span>}
                                 </label>
                                 <div className="relative">
-                                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
+                                  <div className={`absolute inset-y-0 ${isRtl ? 'right-0 pr-3' : 'left-0 pl-3'} flex items-center pointer-events-none text-slate-400`}>
                                     <Globe className="w-4 h-4 text-blue-500" />
                                   </div>
                                   <input
                                     type="url"
                                     value={val}
                                     onChange={e => handleFieldChange(srv.id, field.id, e.target.value)}
-                                    placeholder={field.placeholder || 'https://...'}
+                                    placeholder={placeholder || 'https://...'}
                                     dir="ltr"
-                                    className="w-full text-xs p-2.5 pr-9 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500 font-mono text-left"
+                                    className={`w-full text-xs p-2.5 ${isRtl ? 'pr-9' : 'pl-9'} rounded-xl bg-slate-50 border border-slate-200 text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500 font-mono text-left`}
                                   />
                                 </div>
                               </div>
@@ -798,13 +824,13 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
                           return (
                             <div key={field.id}>
                               <label className="block text-xs font-bold text-slate-700 mb-1">
-                                {field.label} {field.unit && <span className="text-slate-400">({field.unit})</span>} {field.required && <span className="text-rose-500">*</span>}
+                                {fieldLabel} {fieldUnit && <span className="text-slate-400">({fieldUnit})</span>} {field.required && <span className="text-rose-500">*</span>}
                               </label>
                               <input
                                 type={field.type}
                                 value={val}
                                 onChange={e => handleFieldChange(srv.id, field.id, field.type === 'number' ? Number(e.target.value) : e.target.value)}
-                                placeholder={field.placeholder}
+                                placeholder={placeholder}
                                 className="w-full text-xs p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500"
                               />
                             </div>
@@ -824,32 +850,36 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
               <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-start gap-3">
                 <Sparkles className="w-6 h-6 text-emerald-600 shrink-0 mt-0.5" />
                 <div>
-                  <h4 className="text-xs font-bold text-emerald-950">معاينة محرك التوجيه الآلي للمهام</h4>
+                  <h4 className="text-xs font-bold text-emerald-950">
+                    {isRtl ? 'معاينة محرك التوجيه الآلي للمهام' : 'Automated Task Routing Engine Preview'}
+                  </h4>
                   <p className="text-xs text-emerald-800 mt-0.5 leading-relaxed">
-                    سيقوم النظام فور نقرك على "تأكيد وإرسال الطلب" بتفكيك الطلب إلى مهام فرعية مستقلة وإرسالها فورياً إلى صناديق المهام للموظفين المعنيين:
+                    {t('wizard.step4_tip')}
                   </p>
                 </div>
               </div>
 
               {/* Event Summary Box */}
               <div className="bg-white p-5 rounded-2xl border border-slate-200">
-                <h3 className="text-base font-bold text-slate-900 mb-3">{formData.eventTitle || 'فعالية بدون عنوان'}</h3>
+                <h3 className="text-base font-bold text-slate-900 mb-3">
+                  {formData.eventTitle || (isRtl ? 'فعالية بدون عنوان' : 'Untitled Event')}
+                </h3>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs text-slate-600">
                   <div>
-                    <span className="block text-slate-400 text-[11px]">النادي مقدم الطلب:</span>
+                    <span className="block text-slate-400 text-[11px]">{t('table.club_name', 'النادي مقدم الطلب:')}:</span>
                     <span className="font-bold text-slate-800">{formData.clubName}</span>
                   </div>
                   <div>
-                    <span className="block text-slate-400 text-[11px]">تاريخ الفعالية:</span>
+                    <span className="block text-slate-400 text-[11px]">{t('wizard.event_date', 'تاريخ الفعالية:')}:</span>
                     <span className="font-bold text-slate-800">{formData.eventDate}</span>
                   </div>
                   <div>
-                    <span className="block text-slate-400 text-[11px]">التوقيت:</span>
+                    <span className="block text-slate-400 text-[11px]">{t('table.date_time', 'التوقيت:')}:</span>
                     <span className="font-bold text-slate-800">{formData.startTime} - {formData.endTime}</span>
                   </div>
                   <div>
-                    <span className="block text-slate-400 text-[11px]">الحضور المتوقع:</span>
-                    <span className="font-bold text-slate-800">{formData.expectedAttendees} مشارك</span>
+                    <span className="block text-slate-400 text-[11px]">{t('details.expected_count', 'الحضور المتوقع:')}:</span>
+                    <span className="font-bold text-slate-800">{formData.expectedAttendees} {isRtl ? 'مشارك' : 'attendees'}</span>
                   </div>
                 </div>
               </div>
@@ -857,7 +887,7 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
               {/* Dispatching Tree */}
               <div className="space-y-3">
                 <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  المهام التي ستوجه تلقائياً ({selectedServiceIds.length} مهام):
+                  {isRtl ? `المهام التي ستوجه تلقائياً (${selectedServiceIds.length} مهام):` : `Automatically Routed Tasks (${selectedServiceIds.length} tasks):`}
                 </h4>
 
                 <div className="divide-y divide-slate-100 bg-white rounded-2xl border border-slate-200 overflow-hidden">
@@ -867,6 +897,8 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
                     const dept = DEPARTMENTS[srv.departmentId];
                     const staff = staffMembers.find(sm => sm.id === srv.staffId) || STAFF_MEMBERS.find(sm => sm.id === srv.staffId);
                     const srvData = servicesData[serviceId];
+                    const localizedSrv = tService(srv.id, srv.name, srv.description);
+                    const localizedDept = dept ? tDepartment(dept.id, dept.name, dept.description) : { name: '', description: '' };
 
                     return (
                       <div key={srv.id} className="p-4 flex items-center justify-between flex-wrap gap-3 hover:bg-slate-50/80 transition-colors">
@@ -876,13 +908,13 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold text-slate-900">{srv.name}</span>
-                              <span className={`text-[10px] px-2 py-0.5 rounded-md font-semibold ${dept.badgeBg}`}>
-                                {dept.name}
+                              <span className="text-xs font-bold text-slate-900">{localizedSrv.name}</span>
+                              <span className={`text-[10px] px-2 py-0.5 rounded-md font-semibold ${dept?.badgeBg || 'bg-slate-100 text-slate-700'}`}>
+                                {localizedDept.name}
                               </span>
                             </div>
                             <p className="text-[11px] text-slate-500 mt-0.5">
-                              المسؤول المباشر: <span className="font-bold text-slate-700">{staff?.shortName}</span> ({staff?.phone})
+                              {t('details.staff_in_charge', 'المسؤول المباشر:')} <span className="font-bold text-slate-700">{tDynamic(staff?.shortName)}</span> ({staff?.phone})
                             </p>
                           </div>
                         </div>
@@ -891,10 +923,10 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
                           <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
                             srvData?.priority === 'urgent' ? 'bg-rose-100 text-rose-800' : srvData?.priority === 'high' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'
                           }`}>
-                            أولوية {srvData?.priority === 'urgent' ? 'عاجلة' : srvData?.priority === 'high' ? 'عالية' : 'عادية'}
+                            {t('table.priority', 'أولوية')} {srvData?.priority === 'urgent' ? t('priority.urgent', 'عاجلة') : srvData?.priority === 'high' ? t('priority.high', 'عالية') : t('priority.normal', 'عادية')}
                           </span>
                           <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
-                            جاهز للتوجيه الفوري ➔
+                            {isRtl ? 'جاهز للتوجيه الفوري ➔' : 'Ready for Routing ➔'}
                           </span>
                         </div>
                       </div>
@@ -915,15 +947,15 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
               onClick={() => setCurrentStep((prev) => (prev - 1) as any)}
               className="px-4 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all flex items-center gap-1 cursor-pointer"
             >
-              <ChevronRight className="w-4 h-4" />
-              <span>الخطوة السابقة</span>
+              {isRtl ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+              <span>{t('wizard.prev_step', 'الخطوة السابقة')}</span>
             </button>
           ) : (
             <button
               onClick={onClose}
               className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 rounded-xl transition-colors cursor-pointer"
             >
-              إلغاء
+              {t('action.cancel', 'إلغاء')}
             </button>
           )}
 
@@ -931,19 +963,25 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
             <button
               onClick={() => {
                 if (currentStep === 1 && !formData.eventTitle.trim()) {
-                  alert('يرجى كتابة عنوان الفعالية');
+                  alert(isRtl ? 'يرجى كتابة عنوان الفعالية' : 'Please enter event title');
                   return;
                 }
                 if (currentStep === 2 && selectedServiceIds.length === 0) {
-                  alert('يرجى اختيار خدمة واحدة على الأقل');
+                  alert(isRtl ? 'يرجى اختيار خدمة واحدة على الأقل' : 'Please select at least one service');
                   return;
                 }
                 setCurrentStep((prev) => (prev + 1) as any);
               }}
               className="px-5 py-2.5 text-xs sm:text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer ring-2 ring-emerald-500/20"
             >
-              <span>متابعة للخطوة التالية</span>
-              <ChevronLeft className="w-4 h-4" />
+              <span>
+                {currentStep === 1 
+                  ? t('wizard.next_step', 'التالي: اختيار الخدمات') 
+                  : currentStep === 2 
+                  ? t('wizard.next_details', 'التالي: تفاصيل الخدمات') 
+                  : t('wizard.next_review', 'التالي: مراجعة التوجيه')}
+              </span>
+              {isRtl ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
             </button>
           ) : (
             <button
@@ -952,7 +990,7 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
               className="px-6 py-2.5 text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 rounded-xl transition-all shadow-md flex items-center gap-2 cursor-pointer ring-2 ring-emerald-500/30"
             >
               <Send className="w-4 h-4" />
-              <span>تأكيد وإرسال وتوجيه المهام تلقائياً</span>
+              <span>{t('wizard.submit_request', 'تأكيد وإرسال وتوجيه المهام تلقائياً')}</span>
             </button>
           )}
         </div>

@@ -23,8 +23,29 @@ import {
   CLUBS_LIST 
 } from '../data/initialData';
 import { fetchGistDatabase, pushGistDatabase, GistDatabasePayload } from '../services/gistSyncService';
+import { 
+  TRANSLATIONS, 
+  Language, 
+  translateDynamic, 
+  translateServiceData, 
+  translateDepartmentData, 
+  translateFieldLabel, 
+  translateOptionValue, 
+  translateUnit 
+} from '../i18n/translations';
 
 interface AppContextType {
+  language: Language;
+  setLanguage: (lang: Language) => void;
+  t: (key: string, defaultText?: string) => string;
+  tDynamic: (text: any) => string;
+  tService: (serviceId: string, originalName?: string, originalDesc?: string) => { name: string; description: string };
+  tDepartment: (deptId: string, originalName?: string, originalDesc?: string) => { name: string; description: string };
+  tField: (fieldIdOrLabel: string, fallback?: string) => string;
+  tOption: (option: string) => string;
+  tUnit: (unit?: string) => string;
+  dir: 'rtl' | 'ltr';
+  isRtl: boolean;
   currentUser: UserAccount | null;
   userAccounts: UserAccount[];
   login: (userId: string) => void;
@@ -144,6 +165,7 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const STORAGE_KEYS = {
+  LANGUAGE: 'club_app_language_v2',
   USER: 'club_auth_user_v2',
   ACCOUNTS: 'club_accounts_list_v2',
   REQUESTS: 'club_requests_app_v2',
@@ -156,6 +178,66 @@ const STORAGE_KEYS = {
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Language State (ar / en)
+  const [language, setLanguageState] = useState<Language>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.LANGUAGE);
+      if (saved === 'ar' || saved === 'en') return saved;
+    } catch (e) {
+      console.error(e);
+    }
+    return 'ar';
+  });
+
+  const setLanguage = (newLang: Language) => {
+    setLanguageState(newLang);
+    try {
+      localStorage.setItem(STORAGE_KEYS.LANGUAGE, newLang);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    document.documentElement.lang = language;
+    document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
+  }, [language]);
+
+  const dir: 'rtl' | 'ltr' = language === 'ar' ? 'rtl' : 'ltr';
+  const isRtl = language === 'ar';
+
+  const t = (key: string, defaultText?: string): string => {
+    const entry = TRANSLATIONS[key];
+    if (entry && entry[language]) {
+      return entry[language];
+    }
+    return defaultText || key;
+  };
+
+  const tDynamic = (text: any): string => {
+    return translateDynamic(text, language);
+  };
+
+  const tService = (serviceId: string, originalName?: string, originalDesc?: string) => {
+    return translateServiceData(serviceId, language, originalName, originalDesc);
+  };
+
+  const tDepartment = (deptId: string, originalName?: string, originalDesc?: string) => {
+    return translateDepartmentData(deptId, language, originalName, originalDesc);
+  };
+
+  const tField = (fieldIdOrLabel: string, fallback?: string): string => {
+    return translateFieldLabel(fieldIdOrLabel, language, fallback);
+  };
+
+  const tOption = (option: string): string => {
+    return translateOptionValue(option, language);
+  };
+
+  const tUnit = (unit?: string): string => {
+    return translateUnit(unit, language);
+  };
+
   // Portal Theme State (Customizable by Admin & users)
   const [portalTheme, setPortalThemeState] = useState<string>(() => {
     try {
@@ -2129,6 +2211,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         clearAllRequests,
         portalTheme,
         setPortalTheme,
+        language,
+        setLanguage,
+        t,
+        tDynamic,
+        tService,
+        tDepartment,
+        tField,
+        tOption,
+        tUnit,
+        dir,
+        isRtl,
       }}
     >
       {children}

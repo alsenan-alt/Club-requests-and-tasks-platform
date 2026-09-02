@@ -12,9 +12,11 @@ import {
   LogOut,
   ShieldCheck,
   Lock,
-  User
+  User,
+  Globe
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { LanguageSwitcher } from './LanguageSwitcher';
 
 interface HeaderProps {
   onOpenReferenceGuide: () => void;
@@ -42,6 +44,9 @@ export const Header: React.FC<HeaderProps> = ({
     setIsSyncModalOpen,
     setSelectedRequestId,
     resetToSampleData,
+    language,
+    t,
+    isRtl
   } = useApp();
 
   const [isNotifDropdownOpen, setIsNotifDropdownOpen] = useState(false);
@@ -56,7 +61,7 @@ export const Header: React.FC<HeaderProps> = ({
   const getRoleDisplay = () => {
     if (currentUser?.role === 'club_president') {
       return {
-        badgeTitle: 'رئيس نادي معتمد',
+        badgeTitle: t('role.club_president', 'رئيس نادي معتمد'),
         entityTitle: currentUser.clubName || activeClubName,
         userName: currentUser.name,
         badgeBg: 'bg-emerald-50 text-emerald-800 border-emerald-200',
@@ -66,8 +71,8 @@ export const Header: React.FC<HeaderProps> = ({
     }
     if (currentUser?.role === 'club_supervisor') {
       return {
-        badgeTitle: 'مشرف الأندية الطلابية',
-        entityTitle: currentUser.department || 'إشراف الأندية',
+        badgeTitle: t('role.club_supervisor', 'مشرف الأندية الطلابية'),
+        entityTitle: currentUser.department || (isRtl ? 'إشراف الأندية' : 'Club Supervision'),
         userName: currentUser.name,
         badgeBg: 'bg-amber-50 text-amber-800 border-amber-200',
         dotClass: 'bg-amber-500',
@@ -76,8 +81,8 @@ export const Header: React.FC<HeaderProps> = ({
     }
     if (currentUser?.role === 'admin') {
       return {
-        badgeTitle: 'المشرف العام',
-        entityTitle: 'إدارة النشاط الطلابي',
+        badgeTitle: t('role.admin', 'المشرف العام'),
+        entityTitle: t('deanship.title', 'إدارة النشاط الطلابي'),
         userName: currentUser.name,
         badgeBg: 'bg-purple-50 text-purple-800 border-purple-200',
         dotClass: 'bg-purple-500',
@@ -86,7 +91,7 @@ export const Header: React.FC<HeaderProps> = ({
     }
     if (currentStaff) {
       return {
-        badgeTitle: 'موظف مختص',
+        badgeTitle: t('role.staff_member', 'موظف مختص'),
         entityTitle: currentStaff.shortName,
         userName: currentStaff.name,
         badgeBg: 'bg-blue-50 text-blue-800 border-blue-200',
@@ -95,9 +100,9 @@ export const Header: React.FC<HeaderProps> = ({
       };
     }
     return {
-      badgeTitle: 'مستخدم',
-      entityTitle: 'حساب مسجل',
-      userName: 'مستخدم النظام',
+      badgeTitle: t('role.user', 'مستخدم'),
+      entityTitle: isRtl ? 'حساب مسجل' : 'Registered Account',
+      userName: isRtl ? 'مستخدم النظام' : 'System User',
       badgeBg: 'bg-slate-50 text-slate-700 border-slate-200',
       dotClass: 'bg-slate-500',
       icon: '👤',
@@ -107,7 +112,7 @@ export const Header: React.FC<HeaderProps> = ({
   const roleInfo = getRoleDisplay();
 
   const handleLogoutClick = () => {
-    if (window.confirm('هل ترغب في تسجيل الخروج وقفل الجلسة الحالية؟')) {
+    if (window.confirm(isRtl ? 'هل ترغب في تسجيل الخروج وقفل الجلسة الحالية؟' : 'Do you want to log out and lock current session?')) {
       logout();
     }
   };
@@ -119,34 +124,40 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center gap-1 font-semibold text-emerald-400">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            نظام التوجيه التلقائي للمهام
+            {t('top_banner.routing_system', 'نظام التوجيه التلقائي للمهام')}
           </span>
           <span className="text-slate-500">|</span>
           <span className="text-slate-300 hidden sm:inline">
-            جلسة مؤمنة بنظام الخصوصية المعزولة لكل نادٍ وموظف
+            {t('top_banner.secure_session', 'جلسة مؤمنة بنظام الخصوصية المعزولة لكل نادٍ وموظف')}
           </span>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 sm:gap-3">
+          {/* Language Switcher in Header Top Banner */}
+          <LanguageSwitcher variant="minimal" />
+
+          <span className="text-slate-700">|</span>
+
           <button
             onClick={onOpenReferenceGuide}
             className="hover:text-emerald-300 transition-colors flex items-center gap-1 cursor-pointer"
           >
             <HelpCircle className="w-3.5 h-3.5 text-emerald-400" />
-            <span>دليل مهام الموظفين الرسمي</span>
+            <span>{t('top_banner.reference_guide', 'دليل مهام الموظفين الرسمي')}</span>
           </button>
+          
           <span className="text-slate-700">|</span>
           <button
             onClick={() => {
-              if (window.confirm('هل تريد استعادة البيانات الافتراضية؟')) {
+              if (window.confirm(t('top_banner.restore_confirm', 'هل تريد استعادة البيانات الافتراضية؟'))) {
                 resetToSampleData();
               }
             }}
             className="text-slate-400 hover:text-slate-200 transition-colors flex items-center gap-1 cursor-pointer"
-            title="إعادة ضبط البيانات التوضيحية"
+            title={t('top_banner.restore_data', 'إعادة ضبط البيانات التوضيحية')}
           >
             <RotateCcw className="w-3 h-3" />
-            <span className="hidden md:inline">استعادة البيانات</span>
+            <span className="hidden md:inline">{t('top_banner.restore_data', 'استعادة البيانات')}</span>
           </button>
         </div>
       </div>
@@ -163,14 +174,14 @@ export const Header: React.FC<HeaderProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight font-['Tajawal',sans-serif]">
-                  منصة طلبات ومهام الأندية
+                  {t('platform.title', 'منصة طلبات ومهام الأندية')}
                 </h1>
                 <span className="px-2 py-0.5 text-[11px] font-semibold bg-emerald-100 text-emerald-800 rounded-full border border-emerald-200/60 hidden sm:inline">
-                  النشاط الطلابي
+                  {t('student_activities', 'النشاط الطلابي')}
                 </span>
               </div>
               <p className="text-xs text-slate-500 hidden sm:block">
-                تقديم الطلبات والتوجيه الآلي المباشر للموظفين المعنيين
+                {t('platform.subtitle', 'تقديم الطلبات والتوجيه الآلي المباشر للموظفين المعنيين')}
               </p>
             </div>
           </div>
@@ -186,7 +197,7 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
             >
               <Layers className="w-4 h-4" />
-              <span>لوحة العمليات والطلبات</span>
+              <span>{t('nav.main', 'لوحة العمليات والطلبات')}</span>
             </button>
 
             <button
@@ -198,7 +209,7 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
             >
               <Calendar className="w-4 h-4" />
-              <span>تقويم المباني والقاعات</span>
+              <span>{t('nav.calendar', 'تقويم المباني والقاعات')}</span>
             </button>
 
             <button
@@ -210,7 +221,7 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
             >
               <FileText className="w-4 h-4" />
-              <span>مصفوفة المهام الموزعة</span>
+              <span>{t('nav.all_tasks', 'مصفوفة المهام الموزعة')}</span>
             </button>
           </div>
 
@@ -225,7 +236,7 @@ export const Header: React.FC<HeaderProps> = ({
                 className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs sm:text-sm font-bold px-3.5 py-2 rounded-xl shadow-sm hover:shadow transition-all flex items-center gap-1.5 cursor-pointer ring-2 ring-emerald-500/20 active:scale-95"
               >
                 <Plus className="w-4 h-4" />
-                <span>تقديم طلب جديد</span>
+                <span>{t('action.new_request', 'تقديم طلب جديد')}</span>
               </button>
             )}
 
@@ -235,7 +246,7 @@ export const Header: React.FC<HeaderProps> = ({
                 id="btn-notifications-toggle"
                 onClick={() => setIsNotifDropdownOpen(!isNotifDropdownOpen)}
                 className="relative p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer border border-slate-200/80"
-                title="الإشعارات والتنبيهات الخاصة بحسابك"
+                title={t('notifications.title', 'الإشعارات والتنبيهات الخاصة بحسابك')}
               >
                 <Bell className="w-5 h-5" />
                 {unreadNotificationCount > 0 && (
@@ -252,12 +263,12 @@ export const Header: React.FC<HeaderProps> = ({
                     className="fixed inset-0 z-40" 
                     onClick={() => setIsNotifDropdownOpen(false)} 
                   />
-                  <div className="absolute left-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-xl border border-slate-200 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+                  <div className={`absolute ${isRtl ? 'left-0' : 'right-0'} mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-xl border border-slate-200 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150`}>
                     <div className="p-3.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Bell className="w-4 h-4 text-slate-700" />
                         <span className="text-xs font-bold text-slate-800">
-                          الإشعارات الخاصة بك ({filteredNotifications.length})
+                          {t('notifications.title', 'الإشعارات الخاصة بك')} ({filteredNotifications.length})
                         </span>
                       </div>
                       {unreadNotificationCount > 0 && (
@@ -265,7 +276,7 @@ export const Header: React.FC<HeaderProps> = ({
                           onClick={markAllNotificationsAsRead}
                           className="text-[11px] font-semibold text-emerald-700 hover:underline cursor-pointer"
                         >
-                          تحديد الكل كمقروء
+                          {t('action.mark_all_read', 'تحديد الكل كمقروء')}
                         </button>
                       )}
                     </div>
@@ -273,7 +284,7 @@ export const Header: React.FC<HeaderProps> = ({
                     <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
                       {filteredNotifications.length === 0 ? (
                         <div className="p-6 text-center text-xs text-slate-500">
-                          لا توجد إشعارات جديدة حالياً
+                          {t('notifications.empty', 'لا توجد إشعارات جديدة حالياً')}
                         </div>
                       ) : (
                         filteredNotifications.map(item => (
@@ -286,7 +297,7 @@ export const Header: React.FC<HeaderProps> = ({
                               }
                               setIsNotifDropdownOpen(false);
                             }}
-                            className={`p-3 text-right hover:bg-slate-50 transition-colors cursor-pointer flex items-start gap-2.5 ${
+                            className={`p-3 text-start hover:bg-slate-50 transition-colors cursor-pointer flex items-start gap-2.5 ${
                               !item.read ? 'bg-emerald-50/40' : ''
                             }`}
                           >
@@ -295,7 +306,7 @@ export const Header: React.FC<HeaderProps> = ({
                               <h4 className="text-xs font-bold text-slate-900 mb-0.5">{item.title}</h4>
                               <p className="text-[11px] text-slate-600 leading-relaxed">{item.message}</p>
                               <span className="text-[10px] text-slate-400 mt-1 inline-block">
-                                {new Date(item.timestamp).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}
+                                {new Date(item.timestamp).toLocaleTimeString(language === 'ar' ? 'ar-SA' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
                               </span>
                             </div>
                           </div>
@@ -312,8 +323,8 @@ export const Header: React.FC<HeaderProps> = ({
               {/* Clickable Profile Avatar & Name */}
               <button
                 onClick={() => setIsUserProfileModalOpen(true)}
-                className="flex items-center gap-2 text-right hover:opacity-85 transition-opacity cursor-pointer group"
-                title="تعديل بيانات الحساب والنادي / لوحة المستخدم"
+                className="flex items-center gap-2 text-start hover:opacity-85 transition-opacity cursor-pointer group"
+                title={t('action.profile', 'تعديل بيانات الحساب والنادي / لوحة المستخدم')}
               >
                 <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold text-xs shadow-xs group-hover:scale-105 transition-transform">
                   {roleInfo.icon}
@@ -335,16 +346,16 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 onClick={() => setIsUserProfileModalOpen(true)}
                 className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-200/60 rounded-lg transition-colors cursor-pointer"
-                title="لوحة المستخدم وتعديل البيانات"
+                title={t('action.profile', 'لوحة المستخدم وتعديل البيانات')}
               >
                 <User className="w-4 h-4" />
               </button>
 
               {/* Sign Out Action Button */}
               <button
-                onClick={logout}
-                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer mr-0.5"
-                title="تسجيل الخروج والعودة لبوابة الدخول"
+                onClick={handleLogoutClick}
+                className={`p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer ${isRtl ? 'mr-0.5' : 'ml-0.5'}`}
+                title={t('action.logout', 'تسجيل الخروج والعودة لبوابة الدخول')}
               >
                 <LogOut className="w-4 h-4" />
               </button>
@@ -357,3 +368,4 @@ export const Header: React.FC<HeaderProps> = ({
     </header>
   );
 };
+

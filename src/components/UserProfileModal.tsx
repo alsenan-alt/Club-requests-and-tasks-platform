@@ -694,7 +694,7 @@ export const UserProfileModal: React.FC = () => {
                       type={showNewPassword ? 'text' : 'password'}
                       value={newPassword}
                       onChange={e => setNewPassword(e.target.value)}
-                      placeholder="أدخل كلمة المرور الجديدة (3 خانات على الأقل)..."
+                      placeholder="أدخل كلمة المرور الجديدة..."
                       className="w-full text-xs sm:text-sm p-3 pl-10 rounded-xl bg-slate-50 border border-slate-300 font-mono focus:bg-white focus:ring-2 focus:ring-emerald-500"
                       required
                     />

@@ -30,6 +30,8 @@ const MainContent: React.FC = () => {
     setActiveQuickServiceId,
     isSyncModalOpen,
     setIsSyncModalOpen,
+    t,
+    isRtl,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'main' | 'calendar' | 'all_tasks'>('main');
@@ -81,7 +83,7 @@ const MainContent: React.FC = () => {
               activeTab === 'main' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'
             }`}
           >
-            الرئيسية
+            {t('nav.main', 'الرئيسية')}
           </button>
           <button
             onClick={() => setActiveTab('calendar')}
@@ -89,7 +91,7 @@ const MainContent: React.FC = () => {
               activeTab === 'calendar' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'
             }`}
           >
-            التقويم
+            {t('nav.calendar', 'التقويم')}
           </button>
           <button
             onClick={() => setActiveTab('all_tasks')}
@@ -97,7 +99,7 @@ const MainContent: React.FC = () => {
               activeTab === 'all_tasks' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'
             }`}
           >
-            المهام الموزعة
+            {t('nav.all_tasks', 'المهام الموزعة')}
           </button>
         </div>
 
@@ -142,13 +144,13 @@ const MainContent: React.FC = () => {
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200 py-6 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p>© 2026 عمادة شؤون الطلاب • منصة توجيه ومعالجة طلبات الأندية الطلابية</p>
+          <p>© 2026 {t('footer.deanship', 'عمادة شؤون الطلاب • منصة توجيه ومعالجة طلبات الأندية الطلابية')}</p>
           <div className="flex items-center gap-4 text-slate-400">
-            <span>أ. حسين رمضان</span>
+            <span>{isRtl ? 'أ. حسين رمضان' : 'Eng. Hussein Ramadan'}</span>
             <span>•</span>
-            <span>أ. موسى آل سنان</span>
+            <span>{isRtl ? 'أ. موسى آل سنان' : 'Mr. Mousa Al-Sinan'}</span>
             <span>•</span>
-            <span>أ. مصلح الشمراني</span>
+            <span>{isRtl ? 'أ. مصلح الشمراني' : 'Mr. Musleh Al-Shamrani'}</span>
           </div>
         </div>
       </footer>

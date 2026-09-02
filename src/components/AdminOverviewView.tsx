@@ -29,8 +29,6 @@ import { ClubRequest, Task } from '../types';
 import { DeleteConfirmationModal } from './DeleteConfirmationModal';
 import { ClearAllRequestsModal } from './ClearAllRequestsModal';
 import { CloudSyncIndicator } from './CloudSyncIndicator';
-import { PortalThemeSelector } from './PortalThemeSelector';
-import { getPortalTheme } from '../data/portalThemes';
 
 interface Props {
   onOpenRequestDetails: (requestId: string) => void;
@@ -48,19 +46,14 @@ export const AdminOverviewView: React.FC<Props> = ({ onOpenRequestDetails }) => 
     userAccounts,
     deleteSupervisorAccount,
     deleteClubAccount,
-    currentAcademicYear,
-    portalTheme,
-    setPortalTheme
+    currentAcademicYear
   } = useApp();
   const [deletingTarget, setDeletingTarget] = useState<{ task?: Task; request: ClubRequest } | null>(null);
   const [isClearAllModalOpen, setIsClearAllModalOpen] = useState(false);
-  const [isPortalThemeModalOpen, setIsPortalThemeModalOpen] = useState(false);
   const [supervisorNotice, setSupervisorNotice] = useState<string | null>(null);
 
   const supervisorsList = userAccounts.filter(u => u.role === 'club_supervisor');
   const clubsListAccounts = userAccounts.filter(u => u.role === 'club_president');
-
-  const currentThemeObj = getPortalTheme(portalTheme);
 
   const totalRequests = requests.length;
   const completedRequests = requests.filter(r => r.status === 'completed').length;
@@ -138,28 +131,6 @@ export const AdminOverviewView: React.FC<Props> = ({ onOpenRequestDetails }) => 
                   {cloudSyncStatus === 'synced' && (
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                   )}
-                </span>
-              </div>
-            </button>
-
-            {/* Portal Theme Selector for Admin */}
-            <button
-              id="btn-admin-portal-theme"
-              onClick={() => setIsPortalThemeModalOpen(true)}
-              className="bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-400/40 text-white px-4 py-2.5 rounded-2xl backdrop-blur-md transition-all flex items-center gap-3 text-xs font-bold shadow-md cursor-pointer group hover:scale-[1.02]"
-              title="تخصيص ثيم وألوان بوابة تسجيل الدخول الرئيسية"
-            >
-              <div className="w-9 h-9 rounded-xl bg-indigo-500/40 flex items-center justify-center text-indigo-200 border border-indigo-300/40 group-hover:scale-110 transition-transform">
-                <Palette className="w-5 h-5 text-indigo-200" />
-              </div>
-              <div className="text-right">
-                <span className="block text-[10px] text-indigo-200 font-medium">ألوان بوابة الدخول</span>
-                <span className="text-xs text-white font-bold flex items-center gap-1.5">
-                  <span>{currentThemeObj.name}</span>
-                  <span 
-                    className="w-2.5 h-2.5 rounded-full border border-white/40 shadow-xs" 
-                    style={{ backgroundColor: currentThemeObj.swatchColors[0] }} 
-                  />
                 </span>
               </div>
             </button>
@@ -508,13 +479,6 @@ export const AdminOverviewView: React.FC<Props> = ({ onOpenRequestDetails }) => 
       <ClearAllRequestsModal
         isOpen={isClearAllModalOpen}
         onClose={() => setIsClearAllModalOpen(false)}
-      />
-
-      <PortalThemeSelector
-        isOpen={isPortalThemeModalOpen}
-        onClose={() => setIsPortalThemeModalOpen(false)}
-        currentThemeId={portalTheme}
-        onSelectTheme={setPortalTheme}
       />
 
     </div>
