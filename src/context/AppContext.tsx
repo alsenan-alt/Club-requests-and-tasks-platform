@@ -116,6 +116,9 @@ interface AppContextType {
   triggerManualSync: () => Promise<void>;
   triggerManualPush: () => Promise<void>;
   resetToSampleData: () => void;
+  currentAcademicYear: string;
+  setCurrentAcademicYear: (year: string) => void;
+  clearAllRequests: (options?: { academicYear?: string; archiveReason?: string }) => { success: boolean; message: string };
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -126,10 +129,29 @@ const STORAGE_KEYS = {
   REQUESTS: 'club_requests_app_v2',
   NOTIFICATIONS: 'club_notifications_app_v2',
   SERVICES: 'club_services_config_v2',
+  DELETED_SERVICES: 'club_deleted_services_ids_v2',
+  ACADEMIC_YEAR: 'club_current_academic_year_v2',
   LAST_MODIFIED: 'club_last_modified_timestamp_v2',
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Academic Year State
+  const [currentAcademicYear, setCurrentAcademicYearState] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.ACADEMIC_YEAR);
+      if (saved) return saved;
+    } catch (e) {
+      console.error(e);
+    }
+    return '1447-1448هـ (2026-2027)';
+  });
+
+  const setCurrentAcademicYear = (year: string) => {
+    setCurrentAcademicYearState(year);
+    localStorage.setItem(STORAGE_KEYS.ACADEMIC_YEAR, year);
+    markLocalDataModified();
+  };
+
   // Accounts State (including custom registered clubs)
   const [userAccounts, setUserAccounts] = useState<UserAccount[]>(() => {
     try {
@@ -144,14 +166,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Services Catalog & Fields Configuration State
   const [services, setServices] = useState<ServiceItem[]>(() => {
     try {
+      const deletedIdsSaved = localStorage.getItem(STORAGE_KEYS.DELETED_SERVICES);
+      const deletedIds: string[] = deletedIdsSaved ? JSON.parse(deletedIdsSaved) : [];
+      const deletedSet = new Set(deletedIds);
+
       const saved = localStorage.getItem(STORAGE_KEYS.SERVICES);
       if (saved) {
         const parsed: ServiceItem[] = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          // Ensure all default services exist (including srv_catering_vip)
-          const existingIds = new Set(parsed.map(s => s.id));
-          const missingDefaults = AVAILABLE_SERVICES.filter(s => !existingIds.has(s.id));
-          const merged = parsed.map(s => {
+          // Filter out explicitly deleted services
+          const filteredParsed = parsed.filter(s => !deletedSet.has(s.id));
+          const existingIds = new Set(filteredParsed.map(s => s.id));
+          // Only add default services that have not been explicitly deleted
+          const missingDefaults = AVAILABLE_SERVICES.filter(s => !existingIds.has(s.id) && !deletedSet.has(s.id));
+          const merged = filteredParsed.map(s => {
             if (s.id === 'srv_catering_vip') {
               return { ...s, restrictedToVip: false };
             }
@@ -160,6 +188,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return [...merged, ...missingDefaults];
         }
       }
+      return AVAILABLE_SERVICES.filter(s => !deletedSet.has(s.id));
     } catch (e) {
       console.error(e);
     }
@@ -231,7 +260,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
 
         // Cloud is newer or equal, safely sync
-        if (Array.isArray(cloudData.requests) && cloudData.requests.length > 0) {
+        if (Array.isArray(cloudData.requests)) {
           setRequests(cloudData.requests);
           localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(cloudData.requests));
         }
@@ -240,9 +269,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(cloudData.userAccounts));
         }
         if (Array.isArray(cloudData.services) && cloudData.services.length > 0) {
-          const existingIds = new Set(cloudData.services.map(s => s.id));
-          const missingDefaults = AVAILABLE_SERVICES.filter(s => !existingIds.has(s.id));
-          const normalized = cloudData.services.map(s => {
+          const deletedIdsSaved = localStorage.getItem(STORAGE_KEYS.DELETED_SERVICES);
+          const deletedIds: string[] = deletedIdsSaved ? JSON.parse(deletedIdsSaved) : [];
+          const deletedSet = new Set(deletedIds);
+
+          const filteredCloudServices = cloudData.services.filter(s => !deletedSet.has(s.id));
+          const existingIds = new Set(filteredCloudServices.map(s => s.id));
+          const missingDefaults = AVAILABLE_SERVICES.filter(s => !existingIds.has(s.id) && !deletedSet.has(s.id));
+          const normalized = filteredCloudServices.map(s => {
             if (s.id === 'srv_catering_vip') {
               return { ...s, restrictedToVip: false };
             }
@@ -252,7 +286,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setServices(mergedServices);
           localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(mergedServices));
         }
-        if (Array.isArray(cloudData.notifications) && cloudData.notifications.length > 0) {
+        if (Array.isArray(cloudData.notifications)) {
           setNotifications(cloudData.notifications);
           localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(cloudData.notifications));
         }
@@ -1442,12 +1476,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (serviceId) {
       const defaultSrv = AVAILABLE_SERVICES.find(s => s.id === serviceId);
       if (defaultSrv) {
+        // Remove from deleted list if it was deleted
+        const deletedIdsSaved = localStorage.getItem(STORAGE_KEYS.DELETED_SERVICES);
+        let deletedIds: string[] = deletedIdsSaved ? JSON.parse(deletedIdsSaved) : [];
+        deletedIds = deletedIds.filter(id => id !== serviceId);
+        localStorage.setItem(STORAGE_KEYS.DELETED_SERVICES, JSON.stringify(deletedIds));
+
         setServices(prev => {
-          nextServices = prev.map(s => s.id === serviceId ? JSON.parse(JSON.stringify(defaultSrv)) : s);
+          const exists = prev.some(s => s.id === serviceId);
+          if (exists) {
+            nextServices = prev.map(s => s.id === serviceId ? JSON.parse(JSON.stringify(defaultSrv)) : s);
+          } else {
+            nextServices = [...prev, JSON.parse(JSON.stringify(defaultSrv))];
+          }
           return nextServices;
         });
       }
     } else {
+      localStorage.removeItem(STORAGE_KEYS.DELETED_SERVICES);
       nextServices = AVAILABLE_SERVICES;
       setServices(AVAILABLE_SERVICES);
     }
@@ -1523,6 +1569,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deletedServiceName = targetService.name;
     }
 
+    // Persist deleted service ID to prevent re-creation upon refresh or pull
+    const deletedIdsSaved = localStorage.getItem(STORAGE_KEYS.DELETED_SERVICES);
+    let deletedIds: string[] = deletedIdsSaved ? JSON.parse(deletedIdsSaved) : [];
+    if (!deletedIds.includes(serviceId)) {
+      deletedIds.push(serviceId);
+      localStorage.setItem(STORAGE_KEYS.DELETED_SERVICES, JSON.stringify(deletedIds));
+    }
+
     let nextServices: ServiceItem[] = [];
     setServices(prev => {
       nextServices = prev.filter(s => s.id !== serviceId);
@@ -1551,10 +1605,65 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   };
 
+  const clearAllRequests = (options?: { academicYear?: string; archiveReason?: string }): { success: boolean; message: string } => {
+    const prevCount = requests.length;
+    const prevTasksCount = requests.reduce((acc, r) => acc + (r.tasks?.length || 0), 0);
+    const newYear = options?.academicYear?.trim() || currentAcademicYear;
+    const reason = options?.archiveReason?.trim() || 'بدء عام أكاديمي جديد وتصفير الطلبات';
+
+    // Clear requests in state and storage
+    setRequests([]);
+    setSelectedRequestId(null);
+    localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify([]));
+
+    // Update academic year if provided
+    if (options?.academicYear?.trim()) {
+      setCurrentAcademicYearState(options.academicYear.trim());
+      localStorage.setItem(STORAGE_KEYS.ACADEMIC_YEAR, options.academicYear.trim());
+    }
+
+    // Create an announcement / system notification for the clear action
+    const resetNotification: NotificationItem = {
+      id: `notif-reset-${Date.now()}`,
+      title: `بدء فترة أكاديمية جديدة (${newYear})`,
+      message: `قام المشرف (${currentUser?.name || 'إدارة النشاط'}) بتصفير جميع طلبات الأندية (${prevCount} طلب) تمهيداً لبدء استقبال طلبات ${newYear}. السبب: ${reason}.`,
+      targetRole: 'all',
+      timestamp: new Date().toISOString(),
+      read: false,
+      type: 'alert',
+    };
+
+    const nextNotifications = [resetNotification, ...notifications.slice(0, 30)];
+    setNotifications(nextNotifications);
+    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(nextNotifications));
+
+    markLocalDataModified();
+
+    // Push cleared state immediately to cloud Gist
+    setTimeout(() => {
+      pushToCloudGist({
+        version: 2,
+        lastUpdated: new Date().toISOString(),
+        updatedBy: `${currentUser?.name || 'إدارة النشاط'} - ${reason}`,
+        requests: [],
+        userAccounts,
+        services,
+        notifications: nextNotifications,
+        clubsList: CLUBS_LIST,
+      });
+    }, 50);
+
+    return {
+      success: true,
+      message: `تم تصفير وحذف جميع طلبات الأندية (${prevCount} طلب، ${prevTasksCount} مهمة) بنجاح وبدء العام الدراسي (${newYear}).`
+    };
+  };
+
   const resetToSampleData = () => {
     localStorage.removeItem(STORAGE_KEYS.REQUESTS);
     localStorage.removeItem(STORAGE_KEYS.NOTIFICATIONS);
     localStorage.removeItem(STORAGE_KEYS.SERVICES);
+    localStorage.removeItem(STORAGE_KEYS.DELETED_SERVICES);
     setRequests(INITIAL_REQUESTS);
     setNotifications(INITIAL_NOTIFICATIONS);
     setServices(AVAILABLE_SERVICES);
@@ -1621,6 +1730,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         triggerManualSync: () => pullFromCloudGist(false),
         triggerManualPush: pushToCloudGist,
         resetToSampleData,
+        currentAcademicYear,
+        setCurrentAcademicYear,
+        clearAllRequests,
       }}
     >
       {children}

@@ -64,6 +64,7 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
   const [regEmail, setRegEmail] = useState('');
   const [regPhone, setRegPhone] = useState('');
   const [regCategory, setRegCategory] = useState('تقني وهندسي');
+  const [customRegCategory, setCustomRegCategory] = useState('');
   const [regOffice, setRegOffice] = useState('');
   const [regBio, setRegBio] = useState('');
   const [regError, setRegError] = useState('');
@@ -145,6 +146,10 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
     }
 
     setRegError('');
+    const finalCategory = regCategory === 'custom' 
+      ? (customRegCategory.trim() || 'عام ومخصص') 
+      : regCategory;
+
     const newAccount = registerNewClubPresident({
       clubName: regClubName,
       presidentName: regPresName,
@@ -152,7 +157,7 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
       password: regPassword.trim(),
       email: regEmail.trim() || `${regPresName.toLowerCase().replace(/\s+/g, '.')}@student.kfupm.edu.sa`,
       phone: regPhone.trim(),
-      category: regCategory,
+      category: finalCategory,
       office: regOffice.trim() || 'مقر الأندية - مبنى 10',
       bio: regBio.trim() || `نادي ${regClubName} الطلابي المعتمد بجامعة الملك فهد للبترول والمعادن.`,
     });
@@ -437,7 +442,12 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
                   </div>
 
                   <div>
-                    <label className="text-xs font-bold text-slate-300 block mb-1">تصنيف النادي:</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-slate-300 block">تصنيف النادي:</label>
+                      {regCategory === 'custom' && (
+                        <span className="text-[10px] text-teal-400 font-bold">كتابة تصنيف يدوي</span>
+                      )}
+                    </div>
                     <select
                       value={regCategory}
                       onChange={e => setRegCategory(e.target.value)}
@@ -449,8 +459,31 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
                       <option value="اجتماعي وتطوعي">اجتماعي وتطوعي</option>
                       <option value="فنون وإبداع">فنون وإبداع</option>
                       <option value="رياضي وكشفي">رياضي وكشفي</option>
+                      <option value="قيادي وتطويري">قيادي وتطويري</option>
+                      <option value="ريادة أعمال وابتكار">ريادة أعمال وابتكار</option>
+                      <option value="إعلامي وتواصلي">إعلامي وتواصلي</option>
+                      <option value="صحي وبيئي">صحي وبيئي</option>
                       <option value="عام">عام</option>
+                      <option value="custom">✏️ أخرى (كتابة تصنيف مخصص غير موجود)...</option>
                     </select>
+
+                    {/* Custom Category Input when selected */}
+                    {regCategory === 'custom' && (
+                      <div className="mt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                        <input
+                          type="text"
+                          value={customRegCategory}
+                          onChange={e => setCustomRegCategory(e.target.value)}
+                          placeholder="اكتب تصنيف النادي المخصص (مثال: ألعاب إلكترونية / فضاء)..."
+                          className="w-full text-xs sm:text-sm p-2.5 rounded-xl bg-slate-800/95 border border-teal-500 text-white focus:ring-2 focus:ring-teal-400 placeholder:text-slate-500 font-bold"
+                          required
+                          autoFocus
+                        />
+                        <p className="text-[10px] text-teal-400 mt-1 font-medium">
+                          سيتم تسجيل واعتماد هذا التصنيف المخصص في بطاقة وبيانات النادي.
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   <div>

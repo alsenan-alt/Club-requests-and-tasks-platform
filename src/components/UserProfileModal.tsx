@@ -57,6 +57,7 @@ export const UserProfileModal: React.FC = () => {
   const [email, setEmail] = useState('');
   const [office, setOffice] = useState('');
   const [category, setCategory] = useState('');
+  const [customCategory, setCustomCategory] = useState('');
   const [bio, setBio] = useState('');
   const [membersCount, setMembersCount] = useState(30);
   const [socialHandle, setSocialHandle] = useState('');
@@ -77,6 +78,7 @@ export const UserProfileModal: React.FC = () => {
   const [newPresPhone, setNewPresPhone] = useState('');
   const [newPresEmail, setNewPresEmail] = useState('');
   const [newClubCat, setNewClubCat] = useState('تقني وهندسي');
+  const [customNewClubCat, setCustomNewClubCat] = useState('');
   const [newClubPassword, setNewClubPassword] = useState('');
 
   // Load user data into form
@@ -87,7 +89,29 @@ export const UserProfileModal: React.FC = () => {
       setPhone(currentUser.phone || '');
       setEmail(currentUser.email || '');
       setOffice(currentUser.office || '');
-      setCategory(currentUser.category || 'علمي وهندسي');
+      
+      const standardCats = [
+        'تقني وهندسي',
+        'علمي وبحثي',
+        'ثقافي وفكري',
+        'اجتماعي وتطوعي',
+        'فنون وإبداع',
+        'رياضي وكشفي',
+        'قيادي وتطويري',
+        'ريادة أعمال وابتكار',
+        'إعلامي وتواصلي',
+        'صحي وبيئي',
+        'عام'
+      ];
+      const currentCat = currentUser.category || 'تقني وهندسي';
+      if (standardCats.includes(currentCat)) {
+        setCategory(currentCat);
+        setCustomCategory('');
+      } else {
+        setCategory('custom');
+        setCustomCategory(currentCat);
+      }
+
       setBio(currentUser.bio || '');
       setMembersCount(currentUser.membersCount || 35);
       setSocialHandle(currentUser.socialHandle || '@club_kfupm');
@@ -106,13 +130,17 @@ export const UserProfileModal: React.FC = () => {
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
+    const finalCategory = category === 'custom'
+      ? (customCategory.trim() || 'عام ومخصص')
+      : category;
+
     updateUserProfile({
       name,
       clubName: currentUser.role === 'club_president' ? clubName : currentUser.clubName,
       phone,
       email,
       office,
-      category,
+      category: finalCategory,
       bio,
       membersCount: Number(membersCount),
       socialHandle,
@@ -168,6 +196,10 @@ export const UserProfileModal: React.FC = () => {
       return;
     }
 
+    const finalCat = newClubCat === 'custom' 
+      ? (customNewClubCat.trim() || 'عام ومخصص') 
+      : newClubCat;
+
     registerNewClubPresident({
       clubName: newClubName,
       presidentName: newPresName,
@@ -175,7 +207,7 @@ export const UserProfileModal: React.FC = () => {
       password: newClubPassword.trim(),
       email: newPresEmail.trim() || `${newPresName.toLowerCase().replace(/\s+/g, '.')}@student.kfupm.edu.sa`,
       phone: newPresPhone.trim() || '0550000000',
-      category: newClubCat,
+      category: finalCat,
       office: 'مقر الأندية الطلابية - مبنى 10',
       bio: `النادي الطلابي المعتمد: ${newClubName}`,
     });
@@ -185,6 +217,7 @@ export const UserProfileModal: React.FC = () => {
     setNewPresPhone('');
     setNewPresEmail('');
     setNewClubPassword('');
+    setCustomNewClubCat('');
     setIsAddingNewClub(false);
     setSaveAlertMessage('تم تسجيل واعتماد النادي وتعيين كلمة المرور بنجاح!');
     setShowSaveAlert(true);
@@ -329,7 +362,12 @@ export const UserProfileModal: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="text-xs font-bold text-slate-700 block mb-1.5">تصنيف النادي:</label>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-xs font-bold text-slate-700 block">تصنيف النادي:</label>
+                        {category === 'custom' && (
+                          <span className="text-[10px] text-emerald-700 font-bold">تصنيف مخصص</span>
+                        )}
+                      </div>
                       <select
                         value={category}
                         onChange={e => setCategory(e.target.value)}
@@ -341,8 +379,26 @@ export const UserProfileModal: React.FC = () => {
                         <option value="اجتماعي وتطوعي">اجتماعي وتطوعي</option>
                         <option value="فنون وإبداع">فنون وإبداع</option>
                         <option value="رياضي وكشفي">رياضي وكشفي</option>
+                        <option value="قيادي وتطويري">قيادي وتطويري</option>
+                        <option value="ريادة أعمال وابتكار">ريادة أعمال وابتكار</option>
+                        <option value="إعلامي وتواصلي">إعلامي وتواصلي</option>
+                        <option value="صحي وبيئي">صحي وبيئي</option>
                         <option value="عام">عام</option>
+                        <option value="custom">✏️ أخرى (كتابة تصنيف مخصص غير موجود)...</option>
                       </select>
+
+                      {category === 'custom' && (
+                        <div className="mt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                          <input
+                            type="text"
+                            value={customCategory}
+                            onChange={e => setCustomCategory(e.target.value)}
+                            placeholder="اكتب تصنيف النادي المخصص..."
+                            className="w-full text-xs sm:text-sm p-2.5 rounded-xl bg-white border border-emerald-500 text-slate-900 font-bold focus:ring-2 focus:ring-emerald-500 shadow-2xs"
+                            required
+                          />
+                        </div>
+                      )}
                     </div>
 
                     <div>
@@ -730,7 +786,12 @@ export const UserProfileModal: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="text-[11px] font-bold text-slate-700 block mb-1">تصنيف النادي:</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-bold text-slate-700 block">تصنيف النادي:</label>
+                        {newClubCat === 'custom' && (
+                          <span className="text-[10px] text-purple-700 font-bold">كتابة تصنيف يدوي</span>
+                        )}
+                      </div>
                       <select
                         value={newClubCat}
                         onChange={e => setNewClubCat(e.target.value)}
@@ -741,7 +802,29 @@ export const UserProfileModal: React.FC = () => {
                         <option value="ثقافي وفكري">ثقافي وفكري</option>
                         <option value="اجتماعي وتطوعي">اجتماعي وتطوعي</option>
                         <option value="فنون وإبداع">فنون وإبداع</option>
+                        <option value="رياضي وكشفي">رياضي وكشفي</option>
+                        <option value="قيادي وتطويري">قيادي وتطويري</option>
+                        <option value="ريادة أعمال وابتكار">ريادة أعمال وابتكار</option>
+                        <option value="إعلامي وتواصلي">إعلامي وتواصلي</option>
+                        <option value="صحي وبيئي">صحي وبيئي</option>
+                        <option value="عام">عام</option>
+                        <option value="custom">✏️ أخرى (كتابة تصنيف مخصص غير موجود)...</option>
                       </select>
+
+                      {/* Custom Category Input for Admin */}
+                      {newClubCat === 'custom' && (
+                        <div className="mt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                          <input
+                            type="text"
+                            value={customNewClubCat}
+                            onChange={e => setCustomNewClubCat(e.target.value)}
+                            placeholder="اكتب تصنيف النادي المخصص..."
+                            className="w-full text-xs p-2.5 rounded-xl bg-white border border-purple-400 text-slate-900 font-bold focus:ring-2 focus:ring-purple-500"
+                            required
+                            autoFocus
+                          />
+                        </div>
+                      )}
                     </div>
 
                     <div>
