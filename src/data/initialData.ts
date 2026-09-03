@@ -22,7 +22,25 @@ export const USER_ACCOUNTS: UserAccount[] = [
     isCustom: true,
   },
 
-  // 2. حسابات الموظفين المعنيين الثلاثة
+  // 2. حساب المشرف الأكاديمي لنادي وعينا
+  {
+    id: 'user_sup_518587',
+    username: 'm.alshami',
+    password: '123',
+    name: 'محمد حمد الشامي',
+    role: 'club_supervisor',
+    title: 'مشرف نادي وعينا الأكاديمي',
+    department: 'إشراف الأندية الطلابية',
+    email: 'm.alshami@kfupm.edu.sa',
+    phone: '0501122334',
+    office: 'مبنى 10 - مكتب 120',
+    avatarBg: 'from-amber-600 to-orange-700',
+    bio: 'المشرف الأكاديمي المعتمد لنادي وعينا الطلابي بجامعة الملك فهد للبترول والمعادن.',
+    supervisedClubNames: ['نادي وعينا'],
+    isCustom: true,
+  },
+
+  // 3. حسابات الموظفين المعنيين الثلاثة
   {
     id: 'user_staff_hussein',
     username: 'h.ramadan',

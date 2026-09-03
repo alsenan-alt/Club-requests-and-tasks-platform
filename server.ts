@@ -9,6 +9,56 @@ const GIST_FILENAME = process.env.GITHUB_GIST_FILENAME || 'Club requests and tas
 const RAW_URL = `https://gist.githubusercontent.com/alsenan-alt/${GIST_ID}/raw/${encodeURIComponent(GIST_FILENAME)}`;
 const LOCAL_DB_FILE = path.join(process.cwd(), 'data_platform_db.json');
 
+function sanitizeDatabasePayload(payload: any) {
+  if (!payload || typeof payload !== 'object') return payload;
+
+  const legacyAccountIds = new Set([
+    'user_club_software',
+    'user_club_debate',
+    'user_club_jawala',
+    'user_club_ee',
+    'user_club_arts',
+    'user_supervisor_khalid',
+    'user_supervisor_fahad',
+    'user_supervisor_abdulaziz',
+    'user_supervisor_mohammed',
+    'user_supervisor_omari',
+  ]);
+
+  const legacyClubNames = new Set([
+    'نادي هندسة البرمجيات والذكاء الاصطناعي',
+    'نادي المناظرات والحوار الفكري',
+    'نادي الجوالة والمغامرات',
+    'نادي الهندسة الكهربائية والميكانيكية',
+    'نادي الفنون والإبداع',
+  ]);
+
+  if (Array.isArray(payload.userAccounts)) {
+    payload.userAccounts = payload.userAccounts.filter((u: any) => 
+      !legacyAccountIds.has(u.id) &&
+      !legacyAccountIds.has(u.username) &&
+      !(u.clubName && legacyClubNames.has(u.clubName.trim()))
+    );
+  }
+
+  if (Array.isArray(payload.clubsList)) {
+    payload.clubsList = payload.clubsList.filter((c: string) => 
+      typeof c === 'string' && !legacyClubNames.has(c.trim())
+    );
+    if (payload.clubsList.length === 0) {
+      payload.clubsList = ['نادي وعينا'];
+    }
+  }
+
+  if (Array.isArray(payload.deletedAccountIds)) {
+    const existing = new Set(payload.deletedAccountIds);
+    legacyAccountIds.forEach(id => existing.add(id));
+    payload.deletedAccountIds = Array.from(existing);
+  }
+
+  return payload;
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -24,10 +74,10 @@ async function startServer() {
     if (fs.existsSync(LOCAL_DB_FILE)) {
       const fileContent = fs.readFileSync(LOCAL_DB_FILE, 'utf-8');
       if (fileContent.trim()) {
-        const parsed = JSON.parse(fileContent);
+        const parsed = sanitizeDatabasePayload(JSON.parse(fileContent));
         inMemoryLatestData = parsed;
         inMemoryLatestTimestamp = parsed.lastUpdated ? new Date(parsed.lastUpdated).getTime() : Date.now();
-        console.log('✅ Loaded database from local disk storage:', inMemoryLatestTimestamp);
+        console.log('✅ Loaded clean database from local disk storage:', inMemoryLatestTimestamp);
       }
     }
   } catch (err) {
@@ -36,11 +86,41 @@ async function startServer() {
 
   const saveToLocalDisk = (data: any) => {
     try {
-      fs.writeFileSync(LOCAL_DB_FILE, JSON.stringify(data, null, 2), 'utf-8');
+      const cleanData = sanitizeDatabasePayload(data);
+      fs.writeFileSync(LOCAL_DB_FILE, JSON.stringify(cleanData, null, 2), 'utf-8');
     } catch (e) {
       console.warn('⚠️ Failed to write to local disk storage:', e);
     }
   };
+
+  // Immediate cloud sync on server startup to ensure remote Gist is clean
+  if (inMemoryLatestData) {
+    (async () => {
+      try {
+        const contentString = JSON.stringify(inMemoryLatestData, null, 2);
+        await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${GITHUB_TOKEN}`,
+            'Accept': 'application/vnd.github+json',
+            'Content-Type': 'application/json',
+            'User-Agent': 'Club-Requests-KFUPM-App',
+          },
+          body: JSON.stringify({
+            description: 'Club requests and tasks platform synchronized database',
+            files: {
+              [GIST_FILENAME]: {
+                content: contentString,
+              },
+            },
+          }),
+        });
+        console.log('☁️ Clean state successfully synchronized to remote GitHub Gist.');
+      } catch (err) {
+        console.warn('Startup Gist sync warning:', err);
+      }
+    })();
+  }
 
   // API Route: Health check
   app.get('/api/health', (_req, res) => {
@@ -73,7 +153,7 @@ async function startServer() {
           const fileObj = gistData.files && (gistData.files[filename] || Object.values(gistData.files)[0]);
           if (fileObj && fileObj.content) {
             try {
-              const parsed = JSON.parse(fileObj.content);
+              const parsed = sanitizeDatabasePayload(JSON.parse(fileObj.content));
               const cloudTime = parsed.lastUpdated ? new Date(parsed.lastUpdated).getTime() : 0;
               
               // If in-memory is newer than cloud, prefer in-memory and update Gist
