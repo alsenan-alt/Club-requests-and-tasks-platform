@@ -76,6 +76,55 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
   const [regSupBio, setRegSupBio] = useState('');
   const [regSupError, setRegSupError] = useState('');
 
+  // Inline Supervisor Registration Modal inside Register Club tab
+  const [showInlineSupervisorModal, setShowInlineSupervisorModal] = useState(false);
+  const [inlineSupName, setInlineSupName] = useState('');
+  const [inlineSupEmail, setInlineSupEmail] = useState('');
+  const [inlineSupPhone, setInlineSupPhone] = useState('');
+  const [inlineSupOffice, setInlineSupOffice] = useState('');
+  const [inlineSupPassword, setInlineSupPassword] = useState('');
+  const [inlineSupError, setInlineSupError] = useState('');
+  const [inlineSupSuccess, setInlineSupSuccess] = useState('');
+
+  // Handle Quick Inline Supervisor Registration Submit
+  const handleQuickInlineSupervisorSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setInlineSupError('');
+    setInlineSupSuccess('');
+
+    if (!inlineSupName.trim()) {
+      setInlineSupError(isRtl ? 'يرجى إدخال اسم المشرف الأكاديمي' : 'Please enter supervisor name');
+      return;
+    }
+
+    try {
+      const newSup = registerNewSupervisor({
+        name: inlineSupName.trim(),
+        title: isRtl ? 'مشرف أكاديمي معتمد' : 'Certified Academic Supervisor',
+        department: isRtl ? 'إشراف الأندية الطلابية' : 'Student Clubs Supervision',
+        email: inlineSupEmail.trim() || `${inlineSupName.toLowerCase().replace(/\s+/g, '.')}@kfupm.edu.sa`,
+        phone: inlineSupPhone.trim() || '',
+        office: inlineSupOffice.trim() || 'مبنى العمادة / الكلية',
+        password: inlineSupPassword.trim() || '123',
+        bio: isRtl ? `مشرف أكاديمي معتمد للأندية الطلابية.` : 'Certified Student Clubs Academic Supervisor.',
+      });
+
+      setRegSupervisorId(newSup.id);
+      setInlineSupSuccess(isRtl ? `تم تسجيل المشرف (${newSup.name}) بنجاح وتم اختياره لناديك!` : `Supervisor ${newSup.name} registered and selected!`);
+      setTimeout(() => {
+        setShowInlineSupervisorModal(false);
+        setInlineSupName('');
+        setInlineSupEmail('');
+        setInlineSupPhone('');
+        setInlineSupOffice('');
+        setInlineSupPassword('');
+        setInlineSupSuccess('');
+      }, 1000);
+    } catch (err: any) {
+      setInlineSupError(err?.message || 'حدث خطأ أثناء حفظ المشرف');
+    }
+  };
+
   // Staff Login State
   const [selectedStaffId, setSelectedStaffId] = useState<string>('staff_hussein');
   const [staffPassword, setStaffPassword] = useState('');
@@ -948,14 +997,11 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
                       </label>
                       <button
                         type="button"
-                        onClick={() => {
-                          setActiveTab('supervisors');
-                          setSupervisorMode('register');
-                        }}
-                        className="text-[10px] text-amber-400 hover:text-amber-300 hover:underline font-bold cursor-pointer inline-flex items-center gap-1"
+                        onClick={() => setShowInlineSupervisorModal(true)}
+                        className="text-[11px] text-amber-300 hover:text-amber-200 bg-amber-950/60 border border-amber-500/40 px-2.5 py-1 rounded-lg hover:border-amber-400 font-bold cursor-pointer inline-flex items-center gap-1.5 transition-all"
                       >
-                        <Sparkles className="w-3 h-3" />
-                        <span>{t('login.supervisor_unregistered_prompt', 'مشرفك غير مسجل؟ اضغط لإضافته')}</span>
+                        <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                        <span>{t('login.supervisor_unregistered_prompt', 'مشرفك غير مسجل؟ اضغط هنا لإضافته فوراً')}</span>
                       </button>
                     </div>
                     <select
@@ -964,10 +1010,10 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
                       className="w-full text-xs sm:text-sm p-3 rounded-xl bg-slate-800 border border-amber-500/60 text-white focus:ring-2 focus:ring-amber-500 font-semibold cursor-pointer"
                       required
                     >
-                      <option value="">-- {t('login.choose_supervisor_placeholder', 'اختر المشرف الأكاديمي المسند للنادي')} --</option>
+                      <option value="">-- {t('login.choose_supervisor_placeholder', 'اختر المشرف الأكاديمي المسند للنادي')} ({supervisorAccounts.length} مشرفين متاحين) --</option>
                       {supervisorAccounts.map(sup => (
                         <option key={sup.id} value={sup.id}>
-                          👨‍🏫 {sup.name} ({sup.department || t('club_supervision', 'إشراف الأندية الطلابية')})
+                          👨‍🏫 {sup.name} ({sup.department || t('club_supervision', 'إشراف الأندية الطلابية')}) {sup.isCustom ? '★ جديد' : ''}
                         </option>
                       ))}
                     </select>
@@ -1257,6 +1303,140 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
           <p>{t('login.footer_copyright', 'عمادة شؤون الطلاب • جامعة الملك فهد للبترول والمعادن (KFUPM) • 2026')}</p>
         </div>
       </div>
+
+      {/* Inline Quick Supervisor Registration Modal */}
+      {showInlineSupervisorModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-amber-500/50 rounded-3xl w-full max-w-lg p-5 sm:p-6 text-white shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold">
+                  👨‍🏫
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-bold text-white font-['Tajawal',sans-serif]">
+                    {t('login.quick_add_sup_title', 'تسجيل وإدراج مشرف أكاديمي جديد')}
+                  </h3>
+                  <p className="text-[11px] text-amber-300/80">
+                    {t('login.quick_add_sup_subtitle', 'يتم حفظ المشرف وإدراجه فوراً في القائمة واختياره لناديك')}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowInlineSupervisorModal(false)}
+                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {inlineSupError && (
+              <div className="p-3 rounded-xl bg-rose-950/80 border border-rose-500 text-rose-200 text-xs font-bold flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>{inlineSupError}</span>
+              </div>
+            )}
+
+            {inlineSupSuccess && (
+              <div className="p-3 rounded-xl bg-emerald-950/80 border border-emerald-500 text-emerald-200 text-xs font-bold flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{inlineSupSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleQuickInlineSupervisorSubmit} className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1">
+                  {t('login.sup_full_name', 'اسم المشرف الثلاثي:')} <span className="text-amber-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={inlineSupName}
+                  onChange={e => setInlineSupName(e.target.value)}
+                  placeholder={isRtl ? "مثال: د. محمد بن عبد الله الشمري" : "e.g., Dr. Mohammed Al-Shammari"}
+                  className="w-full text-xs sm:text-sm p-3 rounded-xl bg-slate-800 border border-slate-700 text-white focus:ring-2 focus:ring-amber-500 font-bold"
+                  required
+                  autoFocus
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">
+                    {t('login.univ_email', 'البريد الإلكتروني الجامعي:')}
+                  </label>
+                  <input
+                    type="email"
+                    value={inlineSupEmail}
+                    onChange={e => setInlineSupEmail(e.target.value)}
+                    placeholder="example@kfupm.edu.sa"
+                    className="w-full text-xs sm:text-sm p-3 rounded-xl bg-slate-800 border border-slate-700 text-white focus:ring-2 focus:ring-amber-500 font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">
+                    {t('field.phone', 'رقم الجوال:')}
+                  </label>
+                  <input
+                    type="tel"
+                    value={inlineSupPhone}
+                    onChange={e => setInlineSupPhone(e.target.value)}
+                    placeholder="05XXXXXXXX"
+                    className="w-full text-xs sm:text-sm p-3 rounded-xl bg-slate-800 border border-slate-700 text-white focus:ring-2 focus:ring-amber-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">
+                    {t('login.sup_office', 'مكتب المشرف / الكلية:')}
+                  </label>
+                  <input
+                    type="text"
+                    value={inlineSupOffice}
+                    onChange={e => setInlineSupOffice(e.target.value)}
+                    placeholder={isRtl ? "مبنى 22 - مكتب 315" : "Bldg 22 - Office 315"}
+                    className="w-full text-xs sm:text-sm p-3 rounded-xl bg-slate-800 border border-slate-700 text-white focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">
+                    {t('login.set_sup_password', 'كلمة مرور المشرف للدخول:')}
+                  </label>
+                  <input
+                    type="text"
+                    value={inlineSupPassword}
+                    onChange={e => setInlineSupPassword(e.target.value)}
+                    placeholder="123"
+                    className="w-full text-xs sm:text-sm p-3 rounded-xl bg-slate-800 border border-slate-700 text-white focus:ring-2 focus:ring-amber-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-3 flex items-center gap-3">
+                <button
+                  type="submit"
+                  className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-98"
+                >
+                  <Sparkles className="w-4 h-4 text-slate-950 fill-slate-950" />
+                  <span>{t('action.save_and_select_sup', 'حفظ وإدراج المشرف مباشرة في القائمة')}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowInlineSupervisorModal(false)}
+                  className="py-3 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold cursor-pointer"
+                >
+                  {t('action.cancel', 'إلغاء')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <div />
     </div>

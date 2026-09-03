@@ -113,6 +113,113 @@ export const RequestDetailsModal: React.FC<Props> = ({ requestId, onClose }) => 
           {activeTab === 'overview' && (
             <div className="space-y-6">
               
+              {/* Approval Lifecycle Stepper (President -> Supervisor -> Staff -> Execution) */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  <span>دورة الاعتماد والتوجيه التنفيذي للفعالية:</span>
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+                  {/* Step 1: President Submission */}
+                  <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="w-6 h-6 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-xs">1</span>
+                      <strong className="text-emerald-900">رئيس النادي</strong>
+                    </div>
+                    <span className="text-[11px] text-emerald-800 block">تم تقديم الطلب بنجاح</span>
+                    <span className="text-[10px] text-emerald-600 font-semibold">{request.presidentName || request.clubName}</span>
+                  </div>
+
+                  {/* Step 2: Academic Supervisor Review */}
+                  <div className={`p-3.5 rounded-xl border ${
+                    request.supervisorStatus === 'approved' 
+                      ? 'bg-emerald-50 border-emerald-200' 
+                      : request.supervisorStatus === 'needs_info'
+                      ? 'bg-amber-50 border-amber-300 ring-2 ring-amber-400/30'
+                      : request.supervisorStatus === 'rejected'
+                      ? 'bg-rose-50 border-rose-200'
+                      : 'bg-amber-50 border-amber-200'
+                  }`}>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className={`w-6 h-6 rounded-full font-bold flex items-center justify-center text-xs ${
+                        request.supervisorStatus === 'approved' ? 'bg-emerald-600 text-white' : 'bg-amber-500 text-slate-900'
+                      }`}>2</span>
+                      <strong className={request.supervisorStatus === 'approved' ? 'text-emerald-900' : 'text-amber-900'}>مشرف النادي</strong>
+                    </div>
+                    <span className="text-[11px] font-bold block">
+                      {request.supervisorStatus === 'approved' && '✅ معتمد وموافق عليه'}
+                      {request.supervisorStatus === 'needs_info' && '⚠️ مطلوب تعديلات وإيضاح'}
+                      {request.supervisorStatus === 'rejected' && '❌ معتذر عنه'}
+                      {(!request.supervisorStatus || request.supervisorStatus === 'pending') && '⏳ قيد المراجعة والاعتماد'}
+                    </span>
+                    <span className="text-[10px] text-slate-600 block truncate">
+                      {request.supervisorName || 'المشرف الأكاديمي'}
+                    </span>
+                  </div>
+
+                  {/* Step 3: Staff Assignment */}
+                  <div className={`p-3.5 rounded-xl border ${
+                    request.status === 'in_progress' || request.status === 'completed' || request.status === 'submitted'
+                      ? 'bg-blue-50 border-blue-200'
+                      : 'bg-slate-50 border-slate-200 text-slate-400'
+                  }`}>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="w-6 h-6 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-xs">3</span>
+                      <strong className="text-blue-900">الموظفون التنفيذيون</strong>
+                    </div>
+                    <span className="text-[11px] text-blue-800 block">توجيه {request.tasks.length} مهام ميدانية</span>
+                    <span className="text-[10px] text-slate-500">أ. حسين • أ. موسى • أ. مصلح</span>
+                  </div>
+
+                  {/* Step 4: Completion */}
+                  <div className={`p-3.5 rounded-xl border ${
+                    progressPct === 100
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                      : 'bg-slate-50 border-slate-200 text-slate-400'
+                  }`}>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className={`w-6 h-6 rounded-full font-bold flex items-center justify-center text-xs ${
+                        progressPct === 100 ? 'bg-emerald-600 text-white' : 'bg-slate-300 text-slate-700'
+                      }`}>4</span>
+                      <strong className="text-slate-800">اكتمال الفعالية</strong>
+                    </div>
+                    <span className="text-[11px] block">{progressPct}% مكتمل</span>
+                    <span className="text-[10px] text-slate-500">{completedCount} من {request.tasks.length} مهام</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Supervisor Notes Box if notes or revision requested */}
+              {(request.supervisorNotes || request.supervisorStatus === 'needs_info') && (
+                <div className={`p-4 sm:p-5 rounded-2xl border-2 ${
+                  request.supervisorStatus === 'needs_info'
+                    ? 'bg-amber-50 border-amber-300 text-amber-950 shadow-xs'
+                    : 'bg-slate-50 border-slate-200 text-slate-900'
+                }`}>
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold text-lg shrink-0 shadow-xs">
+                      📝
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <h4 className="text-sm font-bold text-slate-900 font-['Tajawal',sans-serif]">
+                          توجيهات وملاحظات مشرف النادي ({request.supervisorName || 'المشرف الأكاديمي'})
+                        </h4>
+                        {request.supervisorDecisionDate && (
+                          <span className="text-[11px] text-slate-500">
+                            تاريخ المراجعة: {new Date(request.supervisorDecisionDate).toLocaleDateString('ar-SA')}
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-2 p-3 rounded-xl bg-white border border-amber-200 text-xs font-semibold leading-relaxed text-slate-800">
+                        {request.supervisorNotes || 'لا توجد ملاحظات إضافية مكتوبة.'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Event Quick Summary Card */}
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
