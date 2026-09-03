@@ -406,7 +406,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return now;
   };
 
-  // Function to pull latest data from Gist with smart conflict prevention
+  // Function to pull latest data from Gist / Server with smart conflict prevention and deletion tracking
   const pullFromCloudGist = async (isBackground = false) => {
     if (!isBackground) setCloudSyncStatus('syncing');
     setSyncError(null);
@@ -419,7 +419,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const localSavedTimestampStr = localStorage.getItem(STORAGE_KEYS.LAST_MODIFIED);
         const localTime = localSavedTimestampStr ? parseInt(localSavedTimestampStr, 10) : 0;
 
-        // If local modifications are newer than what came from cloud, preserve local edits and push to cloud!
+        // Consolidate deleted items from cloud & local
+        const deletedIdsSaved = localStorage.getItem(STORAGE_KEYS.DELETED_ACCOUNTS);
+        const localDeletedIds: string[] = deletedIdsSaved ? JSON.parse(deletedIdsSaved) : [];
+        const cloudDeletedIds: string[] = Array.isArray(cloudData.deletedAccountIds) ? cloudData.deletedAccountIds : [];
+        const mergedDeletedAccountIds = Array.from(new Set([...localDeletedIds, ...cloudDeletedIds]));
+        localStorage.setItem(STORAGE_KEYS.DELETED_ACCOUNTS, JSON.stringify(mergedDeletedAccountIds));
+        const deletedAccountSet = new Set(mergedDeletedAccountIds);
+
+        const deletedServicesSaved = localStorage.getItem(STORAGE_KEYS.DELETED_SERVICES);
+        const localDeletedServices: string[] = deletedServicesSaved ? JSON.parse(deletedServicesSaved) : [];
+        const cloudDeletedServices: string[] = Array.isArray(cloudData.deletedServiceIds) ? cloudData.deletedServiceIds : [];
+        const mergedDeletedServiceIds = Array.from(new Set([...localDeletedServices, ...cloudDeletedServices]));
+        localStorage.setItem(STORAGE_KEYS.DELETED_SERVICES, JSON.stringify(mergedDeletedServiceIds));
+        const deletedServiceSet = new Set(mergedDeletedServiceIds);
+
+        // If local modifications are strictly newer than what came from cloud, preserve local edits and push to cloud!
         if (localTime > cloudTime + 1000) {
           console.log('Local changes are newer than cloud data. Preserving local modifications & pushing to sync.');
           pushToCloudGist();
@@ -432,11 +447,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setRequests(cloudData.requests);
           localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(cloudData.requests));
         }
-        if (Array.isArray(cloudData.userAccounts) && cloudData.userAccounts.length > 0) {
-          const deletedIdsSaved = localStorage.getItem(STORAGE_KEYS.DELETED_ACCOUNTS);
-          const deletedIds: string[] = deletedIdsSaved ? JSON.parse(deletedIdsSaved) : [];
-          const deletedSet = new Set(deletedIds);
 
+        if (Array.isArray(cloudData.userAccounts) && cloudData.userAccounts.length > 0) {
           const legacyMockSupervisorIds = new Set([
             'user_supervisor_khalid',
             'user_supervisor_fahad',
@@ -446,16 +458,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ]);
 
           const filteredCloudAccounts = cloudData.userAccounts.filter(u => 
-            !deletedSet.has(u.id) && 
-            !deletedSet.has(u.username) && 
+            !deletedAccountSet.has(u.id) && 
+            !deletedAccountSet.has(u.username) && 
+            !(u.clubName && deletedAccountSet.has(u.clubName)) &&
             !legacyMockSupervisorIds.has(u.id)
           );
 
           const cloudIds = new Set(filteredCloudAccounts.map(u => u.id));
+          // Only add default essential staff/admin accounts if missing, never resurrect deleted clubs/supervisors
           const missingDefaults = USER_ACCOUNTS.filter(u => 
             !cloudIds.has(u.id) && 
-            !deletedSet.has(u.id) && 
-            !deletedSet.has(u.username)
+            !deletedAccountSet.has(u.id) && 
+            !deletedAccountSet.has(u.username) &&
+            (u.role === 'admin' || u.role.startsWith('staff_'))
           );
           const mergedAccounts = [...filteredCloudAccounts, ...missingDefaults];
           setUserAccounts(mergedAccounts);
@@ -467,17 +482,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (freshUser) {
               setCurrentUser(freshUser);
               localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(freshUser));
+            } else if (deletedAccountSet.has(currentUser.id)) {
+              // Current user was deleted on another device, switch to admin or null
+              const adminAcc = mergedAccounts.find(u => u.role === 'admin') || null;
+              setCurrentUser(adminAcc);
+              if (adminAcc) {
+                localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(adminAcc));
+              } else {
+                localStorage.removeItem(STORAGE_KEYS.USER);
+              }
             }
           }
         }
-        if (Array.isArray(cloudData.services) && cloudData.services.length > 0) {
-          const deletedIdsSaved = localStorage.getItem(STORAGE_KEYS.DELETED_SERVICES);
-          const deletedIds: string[] = deletedIdsSaved ? JSON.parse(deletedIdsSaved) : [];
-          const deletedSet = new Set(deletedIds);
 
-          const filteredCloudServices = cloudData.services.filter(s => !deletedSet.has(s.id));
+        if (Array.isArray(cloudData.services) && cloudData.services.length > 0) {
+          const filteredCloudServices = cloudData.services.filter(s => !deletedServiceSet.has(s.id));
           const existingIds = new Set(filteredCloudServices.map(s => s.id));
-          const missingDefaults = AVAILABLE_SERVICES.filter(s => !existingIds.has(s.id) && !deletedSet.has(s.id));
+          const missingDefaults = AVAILABLE_SERVICES.filter(s => !existingIds.has(s.id) && !deletedServiceSet.has(s.id));
           const normalized = filteredCloudServices.map(s => {
             if (s.id === 'srv_catering_vip') {
               return { ...s, restrictedToVip: false };
@@ -488,6 +509,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setServices(mergedServices);
           localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(mergedServices));
         }
+
         if (Array.isArray(cloudData.notifications)) {
           setNotifications(cloudData.notifications);
           localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(cloudData.notifications));
@@ -505,30 +527,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     } catch (e: any) {
       console.error('Error in pullFromCloudGist:', e);
-      setSyncError(e.message || 'فشل الاتصال بـ GitHub Gist');
+      setSyncError(e.message || 'فشل الاتصال بـ السحابة');
       setCloudSyncStatus('error');
     } finally {
       setIsInitialHydrated(true);
     }
   };
 
-  // Function to push full local state to Gist
-  const pushToCloudGist = async (customPayload?: GistDatabasePayload) => {
+  // Function to push full local state to Server and Gist with instant deletion tracking
+  const pushToCloudGist = async (customPayload?: Partial<GistDatabasePayload>) => {
     setCloudSyncStatus('syncing');
     setSyncError(null);
     try {
       const nowIso = new Date().toISOString();
       const nowTimestamp = Date.now();
 
-      const payload: GistDatabasePayload = customPayload || {
+      // Retrieve deleted account and service IDs
+      const deletedIdsSaved = localStorage.getItem(STORAGE_KEYS.DELETED_ACCOUNTS);
+      const deletedAccountIds: string[] = deletedIdsSaved ? JSON.parse(deletedIdsSaved) : [];
+
+      const deletedServicesSaved = localStorage.getItem(STORAGE_KEYS.DELETED_SERVICES);
+      const deletedServiceIds: string[] = deletedServicesSaved ? JSON.parse(deletedServicesSaved) : [];
+
+      // Filter clubsList to exclude any deleted club names
+      const deletedSet = new Set(deletedAccountIds);
+      const dynamicClubs = Array.from(new Set([
+        ...(customPayload?.userAccounts || userAccounts).filter(u => u.role === 'club_president' && u.clubName && !deletedSet.has(u.clubName) && !deletedSet.has(u.id)).map(u => u.clubName!),
+        ...CLUBS_LIST.filter(c => !deletedSet.has(c))
+      ]));
+
+      const payload: GistDatabasePayload = {
         version: 2,
         lastUpdated: nowIso,
         updatedBy: currentUser?.name || 'مستخدم النظام',
-        requests,
-        userAccounts,
-        services,
-        notifications,
-        clubsList: CLUBS_LIST,
+        requests: customPayload?.requests || requests,
+        userAccounts: customPayload?.userAccounts || userAccounts,
+        services: customPayload?.services || services,
+        notifications: customPayload?.notifications || notifications,
+        clubsList: customPayload?.clubsList || dynamicClubs,
+        deletedAccountIds: customPayload?.deletedAccountIds || deletedAccountIds,
+        deletedServiceIds: customPayload?.deletedServiceIds || deletedServiceIds,
       };
 
       // Mark local timestamp
@@ -541,8 +579,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCloudSyncStatus('synced');
         setSyncError(null);
       } else {
-        setSyncError(pushRes.error || 'تم حفظ البيانات محلياً وجاري المزامنة');
-        // Do not switch to error if local data is safely intact in localStorage
+        setSyncError(pushRes.error || 'تم حفظ البيانات محلياً وجاري المزامنة السحابية');
         setCloudSyncStatus('synced');
       }
     } catch (e: any) {
@@ -552,19 +589,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Initial mount: Pull cloud data from Gist
+  // Initial mount: Pull cloud data from Server/Gist
   useEffect(() => {
     pullFromCloudGist(false);
   }, []);
 
-  // Periodic polling every 30 seconds for cross-device live sync
+  // Periodic rapid polling every 5 seconds for cross-device live sync & focus auto-refresh
   useEffect(() => {
+    const handleFocusOrVisible = () => {
+      if (document.visibilityState === 'visible' && cloudSyncStatus !== 'syncing') {
+        pullFromCloudGist(true);
+      }
+    };
+
+    window.addEventListener('focus', handleFocusOrVisible);
+    document.addEventListener('visibilitychange', handleFocusOrVisible);
+
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible' && cloudSyncStatus !== 'syncing') {
         pullFromCloudGist(true);
       }
-    }, 30000);
-    return () => clearInterval(interval);
+    }, 5000);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocusOrVisible);
+      document.removeEventListener('visibilitychange', handleFocusOrVisible);
+    };
   }, [cloudSyncStatus]);
 
   // Debounced auto-save to Gist when state changes (after initial hydration)
@@ -572,6 +623,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!isInitialHydrated) return;
 
     const timer = setTimeout(() => {
+      const deletedIdsSaved = localStorage.getItem(STORAGE_KEYS.DELETED_ACCOUNTS);
+      const deletedAccountIds: string[] = deletedIdsSaved ? JSON.parse(deletedIdsSaved) : [];
+
+      const deletedServicesSaved = localStorage.getItem(STORAGE_KEYS.DELETED_SERVICES);
+      const deletedServiceIds: string[] = deletedServicesSaved ? JSON.parse(deletedServicesSaved) : [];
+
+      const deletedSet = new Set(deletedAccountIds);
+      const dynamicClubs = Array.from(new Set([
+        ...userAccounts.filter(u => u.role === 'club_president' && u.clubName && !deletedSet.has(u.clubName) && !deletedSet.has(u.id)).map(u => u.clubName!),
+        ...CLUBS_LIST.filter(c => !deletedSet.has(c))
+      ]));
+
       const payload: GistDatabasePayload = {
         version: 2,
         lastUpdated: new Date().toISOString(),
@@ -580,7 +643,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         userAccounts,
         services,
         notifications,
-        clubsList: CLUBS_LIST,
+        clubsList: dynamicClubs,
+        deletedAccountIds,
+        deletedServiceIds,
       };
       
       pushGistDatabase(payload, currentUser?.name).then(res => {
@@ -740,10 +805,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     // Update user accounts including the new account and update supervisor's supervisedClubNames
+    let updatedAccounts: UserAccount[] = [];
     setUserAccounts(prev => {
       const updated = [newAccount, ...prev];
       if (newAccount.supervisorId) {
-        return updated.map(u => {
+        updatedAccounts = updated.map(u => {
           if (u.id === newAccount.supervisorId) {
             const existingClubs = u.supervisedClubNames || [];
             if (!existingClubs.includes(cleanClubName)) {
@@ -755,9 +821,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
           return u;
         });
+      } else {
+        updatedAccounts = updated;
       }
-      return updated;
+      return updatedAccounts;
     });
+
+    // Remove from deleted list if previously existed
+    try {
+      const deletedIdsSaved = localStorage.getItem(STORAGE_KEYS.DELETED_ACCOUNTS);
+      if (deletedIdsSaved) {
+        const deletedIds: string[] = JSON.parse(deletedIdsSaved);
+        const filtered = deletedIds.filter(id => id !== newUserId && id !== newAccount.username && id !== cleanClubName);
+        localStorage.setItem(STORAGE_KEYS.DELETED_ACCOUNTS, JSON.stringify(filtered));
+      }
+    } catch (e) {}
 
     setCurrentUser(newAccount);
     setSelectedRequestId(null);
@@ -798,6 +876,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     setNotifications(prev => [...newNotifs, ...prev]);
+
+    markLocalDataModified();
+
+    // Instant cloud synchronization
+    setTimeout(() => {
+      pushToCloudGist({
+        userAccounts: updatedAccounts.length > 0 ? updatedAccounts : [newAccount, ...userAccounts],
+      });
+    }, 50);
 
     try {
       confetti({
@@ -854,7 +941,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       isCustom: true,
     };
 
-    setUserAccounts(prev => [newAccount, ...prev]);
+    const nextAccounts = [newAccount, ...userAccounts];
+    setUserAccounts(nextAccounts);
+    localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(nextAccounts));
+
+    // Remove from deleted list if previously existed
+    try {
+      const deletedIdsSaved = localStorage.getItem(STORAGE_KEYS.DELETED_ACCOUNTS);
+      if (deletedIdsSaved) {
+        const deletedIds: string[] = JSON.parse(deletedIdsSaved);
+        const filtered = deletedIds.filter(id => id !== newUserId && id !== newAccount.username && id !== cleanName);
+        localStorage.setItem(STORAGE_KEYS.DELETED_ACCOUNTS, JSON.stringify(filtered));
+      }
+    } catch (e) {}
+
     setCurrentUser(newAccount);
     setSelectedRequestId(null);
 
@@ -882,6 +982,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ];
 
     setNotifications(prev => [...newNotifs, ...prev]);
+
+    markLocalDataModified();
+
+    // Instant cloud synchronization
+    setTimeout(() => {
+      pushToCloudGist({
+        userAccounts: nextAccounts,
+      });
+    }, 50);
 
     try {
       confetti({
@@ -911,16 +1020,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const supUsername = target.username;
 
     // Save to DELETED_ACCOUNTS in localStorage to permanently prevent re-creation or sync resurrecting it
+    let updatedDeletedIds: string[] = [];
     try {
       const deletedIdsSaved = localStorage.getItem(STORAGE_KEYS.DELETED_ACCOUNTS);
       const deletedIds: string[] = deletedIdsSaved ? JSON.parse(deletedIdsSaved) : [];
-      const updatedDeletedIds = Array.from(new Set([...deletedIds, supervisorId, supUsername]));
+      updatedDeletedIds = Array.from(new Set([...deletedIds, supervisorId, supUsername, supName]));
       localStorage.setItem(STORAGE_KEYS.DELETED_ACCOUNTS, JSON.stringify(updatedDeletedIds));
     } catch (e) {
       console.error('Error saving deleted supervisor:', e);
     }
 
-    const updatedAccounts = userAccounts.filter(u => u.id !== supervisorId);
+    const updatedAccounts = userAccounts
+      .filter(u => u.id !== supervisorId && u.username !== supUsername)
+      .map(u => {
+        // Clear supervisor link if this supervisor was assigned to clubs
+        if (u.supervisorId === supervisorId || u.supervisorName === supName) {
+          return {
+            ...u,
+            supervisorId: undefined,
+            supervisorName: undefined,
+          };
+        }
+        return u;
+      });
+
     setUserAccounts(updatedAccounts);
     localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(updatedAccounts));
 
@@ -948,6 +1071,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...prev,
     ]);
 
+    // Instant cloud synchronization push
+    setTimeout(() => {
+      pushToCloudGist({
+        userAccounts: updatedAccounts,
+        deletedAccountIds: updatedDeletedIds,
+      });
+    }, 50);
+
     return { success: true, message: `تم حذف حساب المشرف (${supName}) نهائياً` };
   };
 
@@ -964,22 +1095,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const clubNameToDelete = target.clubName || target.name;
     const clubUsername = target.username;
 
+    let updatedDeletedIds: string[] = [];
     try {
       const deletedIdsSaved = localStorage.getItem(STORAGE_KEYS.DELETED_ACCOUNTS);
       const deletedIds: string[] = deletedIdsSaved ? JSON.parse(deletedIdsSaved) : [];
-      const updatedDeletedIds = Array.from(new Set([...deletedIds, clubUserId, clubUsername]));
+      updatedDeletedIds = Array.from(new Set([...deletedIds, clubUserId, clubUsername, clubNameToDelete]));
       localStorage.setItem(STORAGE_KEYS.DELETED_ACCOUNTS, JSON.stringify(updatedDeletedIds));
     } catch (e) {
       console.error('Error saving deleted club:', e);
     }
 
-    const updatedAccounts = userAccounts.filter(u => u.id !== clubUserId);
+    const updatedAccounts = userAccounts.filter(u => u.id !== clubUserId && u.username !== clubUsername && u.clubName !== clubNameToDelete);
     setUserAccounts(updatedAccounts);
     localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(updatedAccounts));
 
+    // Also remove from any supervisor's supervisedClubNames
+    const cleanedAccounts = updatedAccounts.map(u => {
+      if (u.supervisedClubNames && u.supervisedClubNames.includes(clubNameToDelete)) {
+        return {
+          ...u,
+          supervisedClubNames: u.supervisedClubNames.filter(c => c !== clubNameToDelete),
+        };
+      }
+      return u;
+    });
+    setUserAccounts(cleanedAccounts);
+    localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(cleanedAccounts));
+
     // If current logged-in user is this deleted club, auto-switch to admin or default
-    if (currentUser?.id === clubUserId) {
-      const fallbackUser = updatedAccounts.find(u => u.role === 'admin') || updatedAccounts[0];
+    if (currentUser?.id === clubUserId || currentUser?.clubName === clubNameToDelete) {
+      const fallbackUser = cleanedAccounts.find(u => u.role === 'admin') || cleanedAccounts[0];
       setCurrentUser(fallbackUser);
       if (fallbackUser) {
         localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(fallbackUser));
@@ -1002,6 +1147,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       },
       ...prev,
     ]);
+
+    // Instant cloud synchronization push
+    setTimeout(() => {
+      const updatedClubs = Array.from(new Set([
+        ...cleanedAccounts.filter(u => u.role === 'club_president' && u.clubName).map(u => u.clubName!),
+        ...CLUBS_LIST.filter(c => c !== clubNameToDelete)
+      ]));
+
+      pushToCloudGist({
+        userAccounts: cleanedAccounts,
+        clubsList: updatedClubs,
+        deletedAccountIds: updatedDeletedIds,
+      });
+    }, 50);
 
     return { success: true, message: `تم حذف حساب (${clubNameToDelete}) من المنظومة بنجاح` };
   };
@@ -1884,6 +2043,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...prev,
     ]);
 
+    markLocalDataModified();
+    setTimeout(() => pushToCloudGist(), 50);
+
     return { 
       success: true, 
       message: remainingCount === 0 
@@ -1902,7 +2064,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     const timestamp = new Date().toISOString();
 
-    setRequests(prev => prev.filter(r => r.id !== requestId));
+    const updatedRequests = requests.filter(r => r.id !== requestId);
+    setRequests(updatedRequests);
+    localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(updatedRequests));
+
     if (selectedRequestId === requestId) {
       setSelectedRequestId(null);
     }
@@ -1921,6 +2086,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ...prev,
       ]);
     }
+
+    markLocalDataModified();
+    setTimeout(() => {
+      pushToCloudGist({
+        requests: updatedRequests,
+      });
+    }, 50);
 
     return { success: true, message: `تم حذف الطلب (${deletedTitle || requestId}) بالكامل بنجاح` };
   };

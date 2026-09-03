@@ -9,6 +9,8 @@ export interface GistDatabasePayload {
   services: ServiceItem[];
   notifications: NotificationItem[];
   clubsList?: string[];
+  deletedAccountIds?: string[];
+  deletedServiceIds?: string[];
 }
 
 const DEFAULT_GITHUB_TOKEN = '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';

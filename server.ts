@@ -1,11 +1,13 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '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';
 const GIST_ID = process.env.GITHUB_GIST_ID || '011b1641afb49fcd0bae42ab6f483230';
 const GIST_FILENAME = process.env.GITHUB_GIST_FILENAME || 'Club requests and tasks platform.json';
 const RAW_URL = `https://gist.githubusercontent.com/alsenan-alt/${GIST_ID}/raw/${encodeURIComponent(GIST_FILENAME)}`;
+const LOCAL_DB_FILE = path.join(process.cwd(), 'data_platform_db.json');
 
 async function startServer() {
   const app = express();
@@ -13,16 +15,39 @@ async function startServer() {
 
   app.use(express.json({ limit: '10mb' }));
 
-  // In-memory cache for fast persistence and cloud sync resilience
+  // In-memory cache + file-based persistence for instant multi-device synchronization
   let inMemoryLatestData: any = null;
   let inMemoryLatestTimestamp: number = 0;
+
+  // Initialize from disk if file exists
+  try {
+    if (fs.existsSync(LOCAL_DB_FILE)) {
+      const fileContent = fs.readFileSync(LOCAL_DB_FILE, 'utf-8');
+      if (fileContent.trim()) {
+        const parsed = JSON.parse(fileContent);
+        inMemoryLatestData = parsed;
+        inMemoryLatestTimestamp = parsed.lastUpdated ? new Date(parsed.lastUpdated).getTime() : Date.now();
+        console.log('✅ Loaded database from local disk storage:', inMemoryLatestTimestamp);
+      }
+    }
+  } catch (err) {
+    console.warn('⚠️ Could not load local disk database:', err);
+  }
+
+  const saveToLocalDisk = (data: any) => {
+    try {
+      fs.writeFileSync(LOCAL_DB_FILE, JSON.stringify(data, null, 2), 'utf-8');
+    } catch (e) {
+      console.warn('⚠️ Failed to write to local disk storage:', e);
+    }
+  };
 
   // API Route: Health check
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
-  // API Route: Get Gist Data
+  // API Route: Get Gist / Server Data
   app.get('/api/sync/gist', async (req, res) => {
     try {
       const headerToken = req.headers['x-github-token'] as string;
@@ -33,8 +58,7 @@ async function startServer() {
       const gistId = headerGistId || process.env.GITHUB_GIST_ID || GIST_ID;
       const filename = headerFilename || process.env.GITHUB_GIST_FILENAME || GIST_FILENAME;
 
-      // If in-memory data is available and very fresh, we can use it or fallback to it
-      // First try fetching directly from GitHub Gist API with auth
+      // 1. Try fetching from GitHub Gist to check if external updates happened
       try {
         const response = await fetch(`https://api.github.com/gists/${gistId}`, {
           headers: {
@@ -52,8 +76,8 @@ async function startServer() {
               const parsed = JSON.parse(fileObj.content);
               const cloudTime = parsed.lastUpdated ? new Date(parsed.lastUpdated).getTime() : 0;
               
-              // If in-memory is newer than cloud, prefer in-memory
-              if (inMemoryLatestData && inMemoryLatestTimestamp > cloudTime) {
+              // If in-memory is newer than cloud, prefer in-memory and update Gist
+              if (inMemoryLatestData && inMemoryLatestTimestamp > cloudTime + 500) {
                 return res.json({
                   success: true,
                   source: 'server_cache',
@@ -63,6 +87,7 @@ async function startServer() {
 
               inMemoryLatestData = parsed;
               inMemoryLatestTimestamp = cloudTime || Date.now();
+              saveToLocalDisk(parsed);
 
               return res.json({
                 success: true,
@@ -71,15 +96,15 @@ async function startServer() {
                 data: parsed,
               });
             } catch (e) {
-              // ignore parse error and proceed
+              // ignore parse error
             }
           }
         }
       } catch (e) {
-        console.warn('GitHub API fetch failed:', e);
+        console.warn('GitHub API fetch failed, falling back to server disk/memory cache:', e);
       }
 
-      // Fallback: Check if we have server in-memory database
+      // 2. Fallback: Check if we have server in-memory/disk database
       if (inMemoryLatestData) {
         return res.json({
           success: true,
@@ -88,7 +113,7 @@ async function startServer() {
         });
       }
 
-      // Fallback: Fetch from Raw URL with cache busting
+      // 3. Fallback: Fetch from Raw URL with cache busting
       try {
         const currentRawUrl = `https://gist.githubusercontent.com/alsenan-alt/${gistId}/raw/${encodeURIComponent(filename)}`;
         const rawRes = await fetch(`${currentRawUrl}?t=${Date.now()}`);
@@ -96,6 +121,7 @@ async function startServer() {
           const rawJson = await rawRes.json();
           inMemoryLatestData = rawJson;
           inMemoryLatestTimestamp = rawJson.lastUpdated ? new Date(rawJson.lastUpdated).getTime() : Date.now();
+          saveToLocalDisk(rawJson);
           return res.json({
             success: true,
             source: 'raw_url',
@@ -126,7 +152,7 @@ async function startServer() {
     }
   });
 
-  // API Route: Save / Push Data to Gist
+  // API Route: Save / Push Data to Server Disk and Gist
   app.post('/api/sync/gist', async (req, res) => {
     try {
       const payload = req.body;
@@ -142,9 +168,10 @@ async function startServer() {
         return res.status(400).json({ success: false, error: 'Invalid payload' });
       }
 
-      // Always save to in-memory server cache immediately so changes are NEVER lost
+      // Always save to in-memory server cache and disk storage immediately
       inMemoryLatestData = payload;
       inMemoryLatestTimestamp = payload.lastUpdated ? new Date(payload.lastUpdated).getTime() : Date.now();
+      saveToLocalDisk(payload);
 
       const contentString = typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2);
 
@@ -180,14 +207,14 @@ async function startServer() {
         console.warn('GitHub Gist PATCH exception:', patchErr);
       }
 
-      // Return success because it is safely cached in server memory and client localStorage
       return res.json({
         success: true,
         savedToGist: patchSuccess,
         savedToMemory: true,
+        savedToDisk: true,
         message: patchSuccess 
-          ? 'تمت مزامنة وحفظ البيانات بنجاح في GitHub Gist' 
-          : 'تم حفظ البيانات بنجاح على الخادم المحلي وجاري محاولة التحديث السحابي',
+          ? 'تمت مزامنة وحفظ البيانات بنجاح في السحابة والخادم' 
+          : 'تم حفظ البيانات بنجاح على الخادم المحلي وجاري المزامنة مع السحابة',
         updatedAt: new Date().toISOString(),
       });
     } catch (err: any) {
