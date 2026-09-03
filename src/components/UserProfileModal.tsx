@@ -53,6 +53,8 @@ export const UserProfileModal: React.FC = () => {
   // Form State for current user profile
   const [name, setName] = useState('');
   const [clubName, setClubName] = useState('');
+  const [title, setTitle] = useState('');
+  const [department, setDepartment] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [office, setOffice] = useState('');
@@ -86,6 +88,8 @@ export const UserProfileModal: React.FC = () => {
     if (currentUser) {
       setName(currentUser.name || '');
       setClubName(currentUser.clubName || '');
+      setTitle(currentUser.title || '');
+      setDepartment(currentUser.department || '');
       setPhone(currentUser.phone || '');
       setEmail(currentUser.email || '');
       setOffice(currentUser.office || '');
@@ -135,15 +139,17 @@ export const UserProfileModal: React.FC = () => {
       : category;
 
     updateUserProfile({
-      name,
-      clubName: currentUser.role === 'club_president' ? clubName : currentUser.clubName,
-      phone,
-      email,
-      office,
+      name: name.trim(),
+      clubName: currentUser.role === 'club_president' ? clubName.trim() : currentUser.clubName,
+      title: title.trim() || currentUser.title,
+      department: department.trim() || currentUser.department,
+      phone: phone.trim(),
+      email: email.trim(),
+      office: office.trim(),
       category: finalCategory,
-      bio,
+      bio: bio.trim(),
       membersCount: Number(membersCount),
-      socialHandle,
+      socialHandle: socialHandle.trim(),
       statusAvailability,
     });
 
@@ -243,7 +249,7 @@ export const UserProfileModal: React.FC = () => {
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
             <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-3xl shadow-inner shrink-0">
-              {currentUser.role === 'club_president' ? '🎓' : currentUser.role === 'admin' ? '👑' : '👔'}
+              {currentUser.role === 'club_president' ? '🎓' : currentUser.role === 'club_supervisor' ? '🏛️' : currentUser.role === 'admin' ? '👑' : '👔'}
             </div>
             
             <div className="flex-1">
@@ -252,15 +258,17 @@ export const UserProfileModal: React.FC = () => {
                   {currentUser.role === 'club_president' ? (currentUser.clubName || 'بيانات النادي الطلابي') : currentUser.name}
                 </h2>
                 <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-white/20 border border-white/30 text-white backdrop-blur-xs">
-                  {currentUser.title}
+                  {currentUser.title || (currentUser.role === 'club_supervisor' ? 'مشرف أكاديمي' : 'موظف النشاط')}
                 </span>
               </div>
               <p className="text-xs text-white/80">
                 {currentUser.role === 'club_president' 
-                  ? `لوحة التحكم وتعديل بيانات النادي، وكلمة مرور الحساب المعتمد`
-                  : currentUser.role === 'admin' 
-                    ? 'لوحة إدارة النشاط وإعدادات المنظومة الشاملة والأمان'
-                    : 'لوحة التحكم ببيانات الموظف وساعات المراجعة وتعديل كلمة المرور'}
+                  ? 'لوحة التحكم وتعديل بيانات النادي، وكلمة مرور الحساب المعتمد'
+                  : currentUser.role === 'club_supervisor'
+                    ? 'لوحة بيانات المشرف الأكاديمي، الأندية المسندة، وساعات الاستشارة وتحديث كلمة المرور'
+                    : currentUser.role === 'admin' 
+                      ? 'لوحة إدارة النشاط وإعدادات المنظومة الشاملة والأمان'
+                      : 'لوحة التحكم ببيانات الموظف وساعات المراجعة وتعديل كلمة المرور'}
               </p>
             </div>
           </div>
@@ -483,8 +491,165 @@ export const UserProfileModal: React.FC = () => {
                 </>
               )}
 
+              {/* Academic Supervisor Section */}
+              {currentUser.role === 'club_supervisor' && (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-amber-50/50 p-4 rounded-2xl border border-amber-200/80">
+                    <div className="text-center p-2.5 bg-white rounded-xl border border-amber-200/60 shadow-2xs">
+                      <span className="text-[10px] text-amber-700 font-semibold block">الأندية المسندة</span>
+                      <span className="text-lg font-bold text-amber-900">
+                        {currentUser.supervisedClubs && currentUser.supervisedClubs.length > 0 
+                          ? currentUser.supervisedClubs.length 
+                          : currentUser.clubName ? 1 : 0}
+                      </span>
+                    </div>
+                    <div className="text-center p-2.5 bg-white rounded-xl border border-amber-200/60 shadow-2xs">
+                      <span className="text-[10px] text-amber-700 font-semibold block">طلبات قيد المراجعة</span>
+                      <span className="text-lg font-bold text-amber-600">
+                        {requests.filter(r => r.status === 'under_review' && (
+                          (currentUser.supervisedClubs && currentUser.supervisedClubs.includes(r.clubName)) ||
+                          r.clubName === currentUser.clubName
+                        )).length}
+                      </span>
+                    </div>
+                    <div className="text-center p-2.5 bg-white rounded-xl border border-amber-200/60 shadow-2xs">
+                      <span className="text-[10px] text-amber-700 font-semibold block">فعاليات معتمدة</span>
+                      <span className="text-lg font-bold text-emerald-600">
+                        {requests.filter(r => r.status === 'approved' && (
+                          (currentUser.supervisedClubs && currentUser.supervisedClubs.includes(r.clubName)) ||
+                          r.clubName === currentUser.clubName
+                        )).length}
+                      </span>
+                    </div>
+                    <div className="text-center p-2.5 bg-white rounded-xl border border-amber-200/60 shadow-2xs">
+                      <span className="text-[10px] text-amber-700 font-semibold block">صفة الحساب</span>
+                      <span className="text-xs font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full mt-1 inline-block">مشرف أكاديمي</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1.5">اسم المشرف الأكاديمي الرباعي:</label>
+                      <input
+                        type="text"
+                        value={name}
+                        onChange={e => setName(e.target.value)}
+                        className="w-full text-xs sm:text-sm p-3 rounded-xl bg-slate-50 border border-slate-300 font-bold focus:bg-white focus:ring-2 focus:ring-amber-500 transition-all"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1.5">الرتبة واللقب الأكاديمي:</label>
+                      <input
+                        type="text"
+                        value={title}
+                        onChange={e => setTitle(e.target.value)}
+                        placeholder="مثال: أستاذ مشارك - قسم الهندسة الميكانيكية"
+                        className="w-full text-xs sm:text-sm p-3 rounded-xl bg-slate-50 border border-slate-300 font-semibold focus:bg-white focus:ring-2 focus:ring-amber-500 transition-all"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1.5">الكلية / القسم الأكاديمي:</label>
+                      <input
+                        type="text"
+                        value={department}
+                        onChange={e => setDepartment(e.target.value)}
+                        placeholder="مثال: كلية علوم وهندسة الحاسب الآلي"
+                        className="w-full text-xs sm:text-sm p-3 rounded-xl bg-slate-50 border border-slate-300 font-semibold focus:bg-white focus:ring-2 focus:ring-amber-500 transition-all"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1.5">حالة التواجد وساعات الإتاحة:</label>
+                      <select
+                        value={statusAvailability}
+                        onChange={e => setStatusAvailability(e.target.value as any)}
+                        className="w-full text-xs sm:text-sm p-3 rounded-xl bg-slate-50 border border-slate-300 font-semibold focus:bg-white focus:ring-2 focus:ring-amber-500 transition-all cursor-pointer"
+                      >
+                        <option value="available">🟢 متاح للاستشارات ومراجعة الفعاليات</option>
+                        <option value="busy">🟡 في محاضرات / اجتماعات علمية</option>
+                        <option value="away">🔴 في إجازة رسمية / خارج الجامعة</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1.5">رقم الجوال / الهاتف المكتبي:</label>
+                      <input
+                        type="tel"
+                        value={phone}
+                        onChange={e => setPhone(e.target.value)}
+                        className="w-full text-xs sm:text-sm p-3 rounded-xl bg-slate-50 border border-slate-300 font-semibold focus:bg-white focus:ring-2 focus:ring-amber-500 transition-all"
+                        placeholder="05xxxxxxxx"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1.5">البريد الإلكتروني الجامعي الرسمي:</label>
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={e => setEmail(e.target.value)}
+                        className="w-full text-xs sm:text-sm p-3 rounded-xl bg-slate-50 border border-slate-300 font-semibold focus:bg-white focus:ring-2 focus:ring-amber-500 transition-all"
+                        placeholder="supervisor@kfupm.edu.sa"
+                        required
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="text-xs font-bold text-slate-700 block mb-1.5">المكتب وساعات الاستشارة الأكاديمية للطلاب:</label>
+                      <input
+                        type="text"
+                        value={office}
+                        onChange={e => setOffice(e.target.value)}
+                        className="w-full text-xs sm:text-sm p-3 rounded-xl bg-slate-50 border border-slate-300 font-semibold focus:bg-white focus:ring-2 focus:ring-amber-500 transition-all"
+                        placeholder="مثال: مبنى 24 - مكتب 310 (الساعات المكتبية: الإثنين والأربعاء 10 - 12)"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Supervised Clubs Badges */}
+                  <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-2xl space-y-2">
+                    <h4 className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                      <Building2 className="w-4 h-4 text-amber-600" />
+                      <span>الأندية الطلابية المسندة تحت إشرافكم الأكاديمي:</span>
+                    </h4>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {currentUser.supervisedClubs && currentUser.supervisedClubs.length > 0 ? (
+                        currentUser.supervisedClubs.map(cName => (
+                          <span key={cName} className="px-3 py-1 bg-white border border-amber-300 text-amber-900 text-xs font-bold rounded-xl shadow-2xs flex items-center gap-1.5">
+                            <span>🎓</span>
+                            <span>{cName}</span>
+                          </span>
+                        ))
+                      ) : currentUser.clubName ? (
+                        <span className="px-3 py-1 bg-white border border-amber-300 text-amber-900 text-xs font-bold rounded-xl shadow-2xs flex items-center gap-1.5">
+                          <span>🎓</span>
+                          <span>{currentUser.clubName}</span>
+                        </span>
+                      ) : (
+                        <span className="text-xs text-amber-700 italic">لا توجد أندية مسندة حالياً.</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1.5">التوجيه الإرشادي والرسالة للأندية الطلابية:</label>
+                    <textarea
+                      rows={3}
+                      value={bio}
+                      onChange={e => setBio(e.target.value)}
+                      className="w-full text-xs sm:text-sm p-3 rounded-xl bg-slate-50 border border-slate-300 font-semibold focus:bg-white focus:ring-2 focus:ring-amber-500 transition-all"
+                      placeholder="اكتب توجيهاتك وإرشاداتك لأعضاء ورؤساء الأندية الطلابية لرفع جودة الفعاليات..."
+                    />
+                  </div>
+                </>
+              )}
+
               {/* Staff Member Section */}
-              {(currentUser.role === 'staff_hussein' || currentUser.role === 'staff_mousa' || currentUser.role === 'staff_musleh') && (
+              {(currentUser.role.startsWith('staff') || currentUser.role === 'staff') && (
                 <>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
@@ -495,6 +660,28 @@ export const UserProfileModal: React.FC = () => {
                         onChange={e => setName(e.target.value)}
                         className="w-full text-xs sm:text-sm p-3 rounded-xl bg-slate-50 border border-slate-300 font-bold focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all"
                         required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1.5">المسمى الوظيفي والمسؤولية:</label>
+                      <input
+                        type="text"
+                        value={title}
+                        onChange={e => setTitle(e.target.value)}
+                        placeholder="مثال: منسق الخدمات اللوجستية والإنارة"
+                        className="w-full text-xs sm:text-sm p-3 rounded-xl bg-slate-50 border border-slate-300 font-semibold focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1.5">الإدارة / القسم:</label>
+                      <input
+                        type="text"
+                        value={department}
+                        onChange={e => setDepartment(e.target.value)}
+                        placeholder="مثال: إدارة الخدمات الطلابية والأنشطة"
+                        className="w-full text-xs sm:text-sm p-3 rounded-xl bg-slate-50 border border-slate-300 font-semibold focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all"
                       />
                     </div>
 
@@ -555,7 +742,19 @@ export const UserProfileModal: React.FC = () => {
                       {currentUser.role === 'staff_hussein' && 'الحركة (الباصات) • الإسكان والخدمات المكتبية • الكهرباء والإنارة • تقنية المعلومات IT • حجز المباني (70، 54، 42، 10، 60).'}
                       {currentUser.role === 'staff_mousa' && 'حجز القاعات والملاعب • إعلانات الفعاليات (الإيميل و The Fives) • المطابع والشهادات • العلاقات العامة والتغطية الإعلامية.'}
                       {currentUser.role === 'staff_musleh' && 'الأمن والسلامة وتصاريح الدخول • الخدمات الغذائية والضيافة الخاصة للفعاليات المعتمدة.'}
+                      {!['staff_hussein', 'staff_mousa', 'staff_musleh'].includes(currentUser.role) && (currentUser.department || 'إدارة النشاط الطلابي وتنسيق الفعاليات المعتمدة.')}
                     </p>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1.5">نبذة / ملاحظات وتوجيهات للمنظومة:</label>
+                    <textarea
+                      rows={2}
+                      value={bio}
+                      onChange={e => setBio(e.target.value)}
+                      className="w-full text-xs sm:text-sm p-3 rounded-xl bg-slate-50 border border-slate-300 font-semibold focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all"
+                      placeholder="اكتب أي ملاحظات إدارية أو أوقات تواجد إضافية..."
+                    />
                   </div>
                 </>
               )}
@@ -571,6 +770,17 @@ export const UserProfileModal: React.FC = () => {
                       onChange={e => setName(e.target.value)}
                       className="w-full text-xs sm:text-sm p-3 rounded-xl bg-slate-50 border border-slate-300 font-bold focus:bg-white focus:ring-2 focus:ring-purple-500 transition-all"
                       required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1.5">المسمى الوظيفي:</label>
+                    <input
+                      type="text"
+                      value={title}
+                      onChange={e => setTitle(e.target.value)}
+                      placeholder="مدير النشاط الطلابي"
+                      className="w-full text-xs sm:text-sm p-3 rounded-xl bg-slate-50 border border-slate-300 font-semibold focus:bg-white focus:ring-2 focus:ring-purple-500 transition-all"
                     />
                   </div>
 
@@ -594,12 +804,22 @@ export const UserProfileModal: React.FC = () => {
                     />
                   </div>
 
-                  <div>
+                  <div className="sm:col-span-2">
                     <label className="text-xs font-bold text-slate-700 block mb-1.5">مقر الإدارة العامة:</label>
                     <input
                       type="text"
                       value={office}
                       onChange={e => setOffice(e.target.value)}
+                      className="w-full text-xs sm:text-sm p-3 rounded-xl bg-slate-50 border border-slate-300 font-semibold focus:bg-white focus:ring-2 focus:ring-purple-500 transition-all"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="text-xs font-bold text-slate-700 block mb-1.5">الرسالة الإدارية وتوجيهات المنظومة:</label>
+                    <textarea
+                      rows={2}
+                      value={bio}
+                      onChange={e => setBio(e.target.value)}
                       className="w-full text-xs sm:text-sm p-3 rounded-xl bg-slate-50 border border-slate-300 font-semibold focus:bg-white focus:ring-2 focus:ring-purple-500 transition-all"
                     />
                   </div>
@@ -632,14 +852,19 @@ export const UserProfileModal: React.FC = () => {
           {activeTab === 'security' && (
             <form onSubmit={handlePasswordChangeSubmit} className="space-y-5 animate-in fade-in">
               
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 border border-amber-500/20 flex items-center justify-center font-bold shrink-0">
-                  <KeyRound className="w-5 h-5" />
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-start gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-600 border border-amber-500/20 flex items-center justify-center font-bold shrink-0 text-xl shadow-2xs">
+                  <KeyRound className="w-6 h-6" />
                 </div>
-                <div>
-                  <h4 className="text-xs font-bold text-slate-900">تعديل كلمة مرور الحساب</h4>
-                  <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-                    يمكنك تغيير كلمة المرور الخاصة بحسابك الحالي (<strong className="text-slate-700">{currentUser.name}</strong>). سيتم طلب كلمة المرور الجديدة فوراً عند محاولة تسجيل الدخول القادمة.
+                <div className="flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h4 className="text-sm font-bold text-slate-900">تعديل كلمة مرور الحساب والأمان</h4>
+                    <span className="px-2 py-0.5 text-[11px] font-bold rounded-lg bg-slate-200/80 text-slate-800">
+                      اسم المستخدم: {currentUser.username}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                    يمكنك تغيير كلمة المرور الخاصة بحساب (<strong className="text-slate-900">{currentUser.name}</strong> - {currentUser.title || currentUser.role}). سيتم حفظ كلمة المرور وتفعيلها فوراً في المنظومة مع المزامنة السحابية.
                   </p>
                 </div>
               </div>

@@ -406,8 +406,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(cloudData.requests));
         }
         if (Array.isArray(cloudData.userAccounts) && cloudData.userAccounts.length > 0) {
-          setUserAccounts(cloudData.userAccounts);
-          localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(cloudData.userAccounts));
+          const cloudIds = new Set(cloudData.userAccounts.map(u => u.id));
+          const missingDefaults = USER_ACCOUNTS.filter(u => !cloudIds.has(u.id));
+          const mergedAccounts = [...cloudData.userAccounts, ...missingDefaults];
+          setUserAccounts(mergedAccounts);
+          localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(mergedAccounts));
+          
+          // Keep current logged-in user in sync
+          if (currentUser) {
+            const freshUser = mergedAccounts.find(u => u.id === currentUser.id);
+            if (freshUser) {
+              setCurrentUser(freshUser);
+              localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(freshUser));
+            }
+          }
         }
         if (Array.isArray(cloudData.services) && cloudData.services.length > 0) {
           const deletedIdsSaved = localStorage.getItem(STORAGE_KEYS.DELETED_SERVICES);
@@ -606,10 +618,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       password: newPassword.trim(),
     };
 
+    markLocalDataModified();
     setCurrentUser(updatedAccount);
-    setUserAccounts(prev => prev.map(acc => acc.id === currentUser.id ? updatedAccount : acc));
+    localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(updatedAccount));
 
-    return { success: true, message: 'تم تحديث كلمة المرور وتعيينها بنجاح!' };
+    setUserAccounts(prev => {
+      const updated = prev.map(acc => acc.id === currentUser.id ? updatedAccount : acc);
+      localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(updated));
+      return updated;
+    });
+
+    // Immediate background push to Cloud
+    pushToCloudGist();
+
+    return { success: true, message: 'تم تحديث وحفظ كلمة المرور الجديدة بنجاح!' };
   };
 
   const logout = () => {
@@ -903,36 +925,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const userIdToUpdate = targetUserId || currentUser?.id;
     if (!userIdToUpdate) return;
 
+    markLocalDataModified();
+
     let targetAccount: UserAccount | undefined;
 
-    setUserAccounts(prev => prev.map(acc => {
-      if (acc.id === userIdToUpdate) {
-        const updated = { ...acc, ...updatedFields };
-        targetAccount = updated;
-        if (currentUser?.id === userIdToUpdate) {
-          setCurrentUser(updated);
+    setUserAccounts(prev => {
+      const updatedList = prev.map(acc => {
+        if (acc.id === userIdToUpdate) {
+          const updated = { ...acc, ...updatedFields };
+          targetAccount = updated;
+          if (currentUser?.id === userIdToUpdate) {
+            setCurrentUser(updated);
+            localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(updated));
+          }
+          return updated;
         }
-        return updated;
-      }
-      return acc;
-    }));
+        return acc;
+      });
+      localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(updatedList));
+      return updatedList;
+    });
 
     // If club president or account with clubName was updated, sync all existing requests for that club
     const clubNameToMatch = targetAccount?.clubName || (currentUser?.id === userIdToUpdate ? currentUser?.clubName : undefined);
     if (clubNameToMatch) {
-      setRequests(prev => prev.map(r => {
-        if (r.clubName === clubNameToMatch) {
-          return {
-            ...r,
-            clubName: updatedFields.clubName || r.clubName,
-            presidentName: updatedFields.name !== undefined ? updatedFields.name : r.presidentName,
-            presidentPhone: updatedFields.phone !== undefined ? updatedFields.phone : r.presidentPhone,
-            presidentEmail: updatedFields.email !== undefined ? updatedFields.email : r.presidentEmail,
-          };
-        }
-        return r;
-      }));
+      setRequests(prev => {
+        const updatedReqs = prev.map(r => {
+          if (r.clubName === clubNameToMatch) {
+            return {
+              ...r,
+              clubName: updatedFields.clubName || r.clubName,
+              presidentName: updatedFields.name !== undefined ? updatedFields.name : r.presidentName,
+              presidentPhone: updatedFields.phone !== undefined ? updatedFields.phone : r.presidentPhone,
+              presidentEmail: updatedFields.email !== undefined ? updatedFields.email : r.presidentEmail,
+            };
+          }
+          return r;
+        });
+        localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(updatedReqs));
+        return updatedReqs;
+      });
     }
+
+    // Immediate background push to cloud
+    pushToCloudGist();
   };
 
   const currentRole: RoleType = currentUser?.role || 'club_president';
