@@ -168,6 +168,7 @@ const STORAGE_KEYS = {
   LANGUAGE: 'club_app_language_v2',
   USER: 'club_auth_user_v2',
   ACCOUNTS: 'club_accounts_list_v2',
+  DELETED_ACCOUNTS: 'club_deleted_accounts_ids_v2',
   REQUESTS: 'club_requests_app_v2',
   NOTIFICATIONS: 'club_notifications_app_v2',
   SERVICES: 'club_services_config_v2',
@@ -274,15 +275,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Accounts State (including custom registered clubs & supervisors)
   const [userAccounts, setUserAccounts] = useState<UserAccount[]>(() => {
     try {
+      const deletedIdsSaved = localStorage.getItem(STORAGE_KEYS.DELETED_ACCOUNTS);
+      const deletedIds: string[] = deletedIdsSaved ? JSON.parse(deletedIdsSaved) : [];
+      const deletedSet = new Set(deletedIds);
+
+      // Pre-seeded mock supervisor IDs to clean up if not desired
+      const legacyMockSupervisorIds = new Set([
+        'user_supervisor_khalid',
+        'user_supervisor_fahad',
+        'user_supervisor_abdulaziz',
+        'user_supervisor_mohammed',
+        'user_supervisor_omari'
+      ]);
+
       const saved = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
       if (saved) {
         const parsed: UserAccount[] = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const parsedIds = new Set(parsed.map(u => u.id));
-          // Missing defaults (especially supervisors and clubs from USER_ACCOUNTS)
-          const missingDefaults = USER_ACCOUNTS.filter(u => !parsedIds.has(u.id));
-          // Also ensure any existing account in USER_ACCOUNTS is merged with full metadata if old structure had missing fields
-          const updatedParsed = parsed.map(u => {
+          // Filter out deleted accounts and legacy mock supervisor accounts
+          const filteredParsed = parsed.filter(u => 
+            !deletedSet.has(u.id) && 
+            !deletedSet.has(u.username) && 
+            !legacyMockSupervisorIds.has(u.id)
+          );
+          const parsedIds = new Set(filteredParsed.map(u => u.id));
+          // Missing defaults from USER_ACCOUNTS (which now only contain staff, admin, and active clubs)
+          const missingDefaults = USER_ACCOUNTS.filter(u => 
+            !parsedIds.has(u.id) && 
+            !deletedSet.has(u.id) && 
+            !deletedSet.has(u.username)
+          );
+          
+          const updatedParsed = filteredParsed.map(u => {
             const defaultAcc = USER_ACCOUNTS.find(d => d.id === u.id);
             if (defaultAcc) {
               return {
@@ -295,9 +319,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
             return u;
           });
-          return [...updatedParsed, ...missingDefaults];
+          const merged = [...updatedParsed, ...missingDefaults];
+          localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(merged));
+          return merged;
         }
       }
+      return USER_ACCOUNTS.filter(u => !deletedSet.has(u.id) && !deletedSet.has(u.username));
     } catch (e) {
       console.error(e);
     }
@@ -406,9 +433,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(cloudData.requests));
         }
         if (Array.isArray(cloudData.userAccounts) && cloudData.userAccounts.length > 0) {
-          const cloudIds = new Set(cloudData.userAccounts.map(u => u.id));
-          const missingDefaults = USER_ACCOUNTS.filter(u => !cloudIds.has(u.id));
-          const mergedAccounts = [...cloudData.userAccounts, ...missingDefaults];
+          const deletedIdsSaved = localStorage.getItem(STORAGE_KEYS.DELETED_ACCOUNTS);
+          const deletedIds: string[] = deletedIdsSaved ? JSON.parse(deletedIdsSaved) : [];
+          const deletedSet = new Set(deletedIds);
+
+          const legacyMockSupervisorIds = new Set([
+            'user_supervisor_khalid',
+            'user_supervisor_fahad',
+            'user_supervisor_abdulaziz',
+            'user_supervisor_mohammed',
+            'user_supervisor_omari'
+          ]);
+
+          const filteredCloudAccounts = cloudData.userAccounts.filter(u => 
+            !deletedSet.has(u.id) && 
+            !deletedSet.has(u.username) && 
+            !legacyMockSupervisorIds.has(u.id)
+          );
+
+          const cloudIds = new Set(filteredCloudAccounts.map(u => u.id));
+          const missingDefaults = USER_ACCOUNTS.filter(u => 
+            !cloudIds.has(u.id) && 
+            !deletedSet.has(u.id) && 
+            !deletedSet.has(u.username)
+          );
+          const mergedAccounts = [...filteredCloudAccounts, ...missingDefaults];
           setUserAccounts(mergedAccounts);
           localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(mergedAccounts));
           
@@ -859,19 +908,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const supName = target.name;
-    setUserAccounts(prev => prev.filter(u => u.id !== supervisorId));
+    const supUsername = target.username;
+
+    // Save to DELETED_ACCOUNTS in localStorage to permanently prevent re-creation or sync resurrecting it
+    try {
+      const deletedIdsSaved = localStorage.getItem(STORAGE_KEYS.DELETED_ACCOUNTS);
+      const deletedIds: string[] = deletedIdsSaved ? JSON.parse(deletedIdsSaved) : [];
+      const updatedDeletedIds = Array.from(new Set([...deletedIds, supervisorId, supUsername]));
+      localStorage.setItem(STORAGE_KEYS.DELETED_ACCOUNTS, JSON.stringify(updatedDeletedIds));
+    } catch (e) {
+      console.error('Error saving deleted supervisor:', e);
+    }
+
+    const updatedAccounts = userAccounts.filter(u => u.id !== supervisorId);
+    setUserAccounts(updatedAccounts);
+    localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(updatedAccounts));
 
     if (currentUser?.id === supervisorId) {
-      const fallbackUser = userAccounts.find(u => u.role === 'admin') || userAccounts[0];
+      const fallbackUser = updatedAccounts.find(u => u.role === 'admin') || updatedAccounts[0];
       setCurrentUser(fallbackUser);
+      if (fallbackUser) {
+        localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(fallbackUser));
+      }
     }
+
+    markLocalDataModified();
 
     const timestamp = new Date().toISOString();
     setNotifications(prev => [
       {
         id: `notif-sup-del-${Date.now()}`,
         title: `حذف حساب مشرف: ${supName}`,
-        message: `تم إزالة حساب المشرف ${supName} من سجل المشرفين المعتمدين.`,
+        message: `تم إزالة حساب المشرف ${supName} من سجل المشرفين المعتمدين نهائياً.`,
         targetRole: 'admin',
         timestamp,
         read: false,
@@ -880,7 +948,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...prev,
     ]);
 
-    return { success: true, message: `تم حذف حساب المشرف (${supName}) بنجاح` };
+    return { success: true, message: `تم حذف حساب المشرف (${supName}) نهائياً` };
   };
 
   // Delete Club Account (Admin capability)
@@ -894,13 +962,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const clubNameToDelete = target.clubName || target.name;
-    setUserAccounts(prev => prev.filter(u => u.id !== clubUserId));
+    const clubUsername = target.username;
+
+    try {
+      const deletedIdsSaved = localStorage.getItem(STORAGE_KEYS.DELETED_ACCOUNTS);
+      const deletedIds: string[] = deletedIdsSaved ? JSON.parse(deletedIdsSaved) : [];
+      const updatedDeletedIds = Array.from(new Set([...deletedIds, clubUserId, clubUsername]));
+      localStorage.setItem(STORAGE_KEYS.DELETED_ACCOUNTS, JSON.stringify(updatedDeletedIds));
+    } catch (e) {
+      console.error('Error saving deleted club:', e);
+    }
+
+    const updatedAccounts = userAccounts.filter(u => u.id !== clubUserId);
+    setUserAccounts(updatedAccounts);
+    localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(updatedAccounts));
 
     // If current logged-in user is this deleted club, auto-switch to admin or default
     if (currentUser?.id === clubUserId) {
-      const fallbackUser = userAccounts.find(u => u.role === 'admin') || userAccounts[0];
+      const fallbackUser = updatedAccounts.find(u => u.role === 'admin') || updatedAccounts[0];
       setCurrentUser(fallbackUser);
+      if (fallbackUser) {
+        localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(fallbackUser));
+      }
     }
+
+    markLocalDataModified();
 
     // Add admin notification
     const timestamp = new Date().toISOString();
