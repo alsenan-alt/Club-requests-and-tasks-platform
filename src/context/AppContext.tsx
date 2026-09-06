@@ -64,6 +64,7 @@ interface AppContextType {
     category?: string;
     office?: string;
     bio?: string;
+    autoLogin?: boolean;
   }) => UserAccount;
   registerNewSupervisor: (formData: {
     name: string;
@@ -76,6 +77,7 @@ interface AppContextType {
     office?: string;
     bio?: string;
     supervisedClubNames?: string[];
+    autoLogin?: boolean;
   }) => UserAccount;
   deleteClubAccount: (clubUserId: string) => { success: boolean; message: string };
   deleteSupervisorAccount: (supervisorId: string) => { success: boolean; message: string };
@@ -594,7 +596,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     pullFromCloudGist(false);
   }, []);
 
-  // Periodic rapid polling every 5 seconds for cross-device live sync & focus auto-refresh
+  // Periodic rapid polling every 3 seconds for cross-device live sync & focus auto-refresh
   useEffect(() => {
     const handleFocusOrVisible = () => {
       if (document.visibilityState === 'visible' && cloudSyncStatus !== 'syncing') {
@@ -609,7 +611,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (document.visibilityState === 'visible' && cloudSyncStatus !== 'syncing') {
         pullFromCloudGist(true);
       }
-    }, 5000);
+    }, 3000);
 
     return () => {
       clearInterval(interval);
@@ -767,6 +769,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     category?: string;
     office?: string;
     bio?: string;
+    autoLogin?: boolean;
   }): UserAccount => {
     const cleanClubName = formData.clubName.startsWith('نادي ') ? formData.clubName : `نادي ${formData.clubName}`;
     const newUserId = `user_club_${Date.now()}`;
@@ -806,39 +809,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Update user accounts including the new account and update supervisor's supervisedClubNames
     let updatedAccounts: UserAccount[] = [];
-    setUserAccounts(prev => {
-      const updated = [newAccount, ...prev];
-      if (newAccount.supervisorId) {
-        updatedAccounts = updated.map(u => {
-          if (u.id === newAccount.supervisorId) {
-            const existingClubs = u.supervisedClubNames || [];
-            if (!existingClubs.includes(cleanClubName)) {
-              return {
-                ...u,
-                supervisedClubNames: [...existingClubs, cleanClubName]
-              };
-            }
+    const prevAccounts = userAccounts;
+    const baseUpdated = [newAccount, ...prevAccounts.filter(u => u.id !== newUserId && u.clubName !== cleanClubName)];
+    if (newAccount.supervisorId) {
+      updatedAccounts = baseUpdated.map(u => {
+        if (u.id === newAccount.supervisorId) {
+          const existingClubs = u.supervisedClubNames || [];
+          if (!existingClubs.includes(cleanClubName)) {
+            return {
+              ...u,
+              supervisedClubNames: [...existingClubs, cleanClubName]
+            };
           }
-          return u;
-        });
-      } else {
-        updatedAccounts = updated;
-      }
-      return updatedAccounts;
-    });
+        }
+        return u;
+      });
+    } else {
+      updatedAccounts = baseUpdated;
+    }
+
+    setUserAccounts(updatedAccounts);
+    localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(updatedAccounts));
 
     // Remove from deleted list if previously existed
+    let cleanDeletedIds: string[] = [];
     try {
       const deletedIdsSaved = localStorage.getItem(STORAGE_KEYS.DELETED_ACCOUNTS);
       if (deletedIdsSaved) {
         const deletedIds: string[] = JSON.parse(deletedIdsSaved);
-        const filtered = deletedIds.filter(id => id !== newUserId && id !== newAccount.username && id !== cleanClubName);
-        localStorage.setItem(STORAGE_KEYS.DELETED_ACCOUNTS, JSON.stringify(filtered));
+        cleanDeletedIds = deletedIds.filter(id => id !== newUserId && id !== newAccount.username && id !== cleanClubName);
+        localStorage.setItem(STORAGE_KEYS.DELETED_ACCOUNTS, JSON.stringify(cleanDeletedIds));
       }
     } catch (e) {}
 
-    setCurrentUser(newAccount);
-    setSelectedRequestId(null);
+    if (formData.autoLogin !== false) {
+      setCurrentUser(newAccount);
+      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(newAccount));
+      setSelectedRequestId(null);
+    }
 
     // Welcome & Supervisor Notifications
     const timestamp = new Date().toISOString();
@@ -876,15 +884,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     setNotifications(prev => [...newNotifs, ...prev]);
-
     markLocalDataModified();
 
-    // Instant cloud synchronization
-    setTimeout(() => {
-      pushToCloudGist({
-        userAccounts: updatedAccounts.length > 0 ? updatedAccounts : [newAccount, ...userAccounts],
-      });
-    }, 50);
+    // Instant cloud synchronization push
+    pushToCloudGist({
+      userAccounts: updatedAccounts,
+      deletedAccountIds: cleanDeletedIds,
+    });
 
     try {
       confetti({
@@ -912,8 +918,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     office?: string;
     bio?: string;
     supervisedClubNames?: string[];
+    autoLogin?: boolean;
   }): UserAccount => {
-    const newUserId = `user_sup_${Date.now().toString().slice(-6)}`;
+    const newUserId = `user_sup_${Date.now()}`;
     const cleanName = formData.name.trim();
 
     const colorGradients = [
@@ -941,22 +948,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       isCustom: true,
     };
 
-    const nextAccounts = [newAccount, ...userAccounts];
+    const nextAccounts = [newAccount, ...userAccounts.filter(u => u.id !== newUserId)];
     setUserAccounts(nextAccounts);
     localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(nextAccounts));
 
     // Remove from deleted list if previously existed
+    let cleanDeletedIds: string[] = [];
     try {
       const deletedIdsSaved = localStorage.getItem(STORAGE_KEYS.DELETED_ACCOUNTS);
       if (deletedIdsSaved) {
         const deletedIds: string[] = JSON.parse(deletedIdsSaved);
-        const filtered = deletedIds.filter(id => id !== newUserId && id !== newAccount.username && id !== cleanName);
-        localStorage.setItem(STORAGE_KEYS.DELETED_ACCOUNTS, JSON.stringify(filtered));
+        cleanDeletedIds = deletedIds.filter(id => id !== newUserId && id !== newAccount.username && id !== cleanName);
+        localStorage.setItem(STORAGE_KEYS.DELETED_ACCOUNTS, JSON.stringify(cleanDeletedIds));
       }
     } catch (e) {}
 
-    setCurrentUser(newAccount);
-    setSelectedRequestId(null);
+    if (formData.autoLogin !== false) {
+      setCurrentUser(newAccount);
+      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(newAccount));
+      setSelectedRequestId(null);
+    }
 
     // Notifications
     const timestamp = new Date().toISOString();
@@ -982,15 +993,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ];
 
     setNotifications(prev => [...newNotifs, ...prev]);
-
     markLocalDataModified();
 
-    // Instant cloud synchronization
-    setTimeout(() => {
-      pushToCloudGist({
-        userAccounts: nextAccounts,
-      });
-    }, 50);
+    // Instant cloud synchronization push
+    pushToCloudGist({
+      userAccounts: nextAccounts,
+      deletedAccountIds: cleanDeletedIds,
+    });
 
     try {
       confetti({
@@ -1407,6 +1416,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       setNotifications(prev => [...newNotifs, ...prev]);
 
+      markLocalDataModified();
+      // Immediate instant push to Cloud and Server without delay
+      pushToCloudGist({
+        requests: [targetReq, ...requests.filter(r => r.id !== requestId)],
+        notifications: [...newNotifs, ...notifications],
+      });
+
       try {
         confetti({
           particleCount: 80,
@@ -1436,7 +1452,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
 
     if (targetReq) {
-      setNotifications(prev => [
+      const newNotifs: NotificationItem[] = [
         {
           id: `notif-${Date.now()}-club-rej`,
           title: `اعتذار مشرف النادي عن الفعالية`,
@@ -1447,8 +1463,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           read: false,
           type: 'alert',
         },
-        ...prev,
-      ]);
+      ];
+      setNotifications(prev => [...newNotifs, ...prev]);
+      markLocalDataModified();
+      pushToCloudGist({
+        requests: [targetReq, ...requests.filter(r => r.id !== requestId)],
+        notifications: [...newNotifs, ...notifications],
+      });
     }
   };
 
@@ -1469,7 +1490,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
 
     if (targetReq) {
-      setNotifications(prev => [
+      const newNotifs: NotificationItem[] = [
         {
           id: `notif-${Date.now()}-club-info`,
           title: `ملاحظات وتعديلات من مشرف النادي`,
@@ -1480,8 +1501,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           read: false,
           type: 'alert',
         },
-        ...prev,
-      ]);
+      ];
+      setNotifications(prev => [...newNotifs, ...prev]);
+      markLocalDataModified();
+      pushToCloudGist({
+        requests: [targetReq, ...requests.filter(r => r.id !== requestId)],
+        notifications: [...newNotifs, ...notifications],
+      });
     }
   };
 
@@ -1627,8 +1653,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     }
 
-    setRequests(prev => [newRequest, ...prev]);
-    setNotifications(prev => [...newNotifs, ...prev]);
+    const nextRequests = [newRequest, ...requests];
+    const nextNotifications = [...newNotifs, ...notifications];
+
+    setRequests(nextRequests);
+    setNotifications(nextNotifications);
+    localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(nextRequests));
+    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(nextNotifications));
+
+    markLocalDataModified();
+
+    // Instant cloud synchronization push for club requests
+    pushToCloudGist({
+      requests: nextRequests,
+      notifications: nextNotifications,
+    });
 
     // Celebration confetti
     try {
@@ -1689,9 +1728,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     commentText?: string
   ) => {
     const timestamp = new Date().toISOString();
+    let updatedAllRequests: ClubRequest[] = [];
 
     setRequests(prev => {
-      return prev.map(req => {
+      updatedAllRequests = prev.map(req => {
         const hasTask = req.tasks.some(t => t.id === taskId);
         if (!hasTask) return req;
 
@@ -1728,12 +1768,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           updatedAt: timestamp,
         };
       });
+      return updatedAllRequests;
     });
+
+    localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(updatedAllRequests));
+    markLocalDataModified();
 
     // Notify club president of task update
     const currentReq = requests.find(r => r.tasks.some(t => t.id === taskId));
     const targetTask = currentReq?.tasks.find(t => t.id === taskId);
 
+    let updatedNotifs = notifications;
     if (currentReq && targetTask) {
       const statusLabels: Record<TaskStatus, string> = {
         pending: 'قيد الانتظار',
@@ -1743,29 +1788,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         needs_info: 'يتطلب معلومات إضافية',
       };
 
-      setNotifications(prev => [
-        {
-          id: `notif-${Date.now()}`,
-          title: `تحديث في مهمة: ${targetTask.serviceName}`,
-          message: `قام ${currentStaff?.shortName || 'الموظف المسؤول'} بتغيير حالة المهمة إلى (${statusLabels[newStatus]}).`,
-          targetRole: 'club_president',
-          requestId: currentReq.id,
-          taskId: targetTask.id,
-          timestamp,
-          read: false,
-          type: 'status_change',
-        },
-        ...prev,
-      ]);
+      const newNotifItem: NotificationItem = {
+        id: `notif-${Date.now()}`,
+        title: `تحديث في مهمة: ${targetTask.serviceName}`,
+        message: `قام ${currentStaff?.shortName || 'الموظف المسؤول'} بتغيير حالة المهمة إلى (${statusLabels[newStatus]}).`,
+        targetRole: 'club_president',
+        requestId: currentReq.id,
+        taskId: targetTask.id,
+        timestamp,
+        read: false,
+        type: 'status_change',
+      };
+
+      updatedNotifs = [newNotifItem, ...notifications];
+      setNotifications(updatedNotifs);
+      localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(updatedNotifs));
     }
+
+    // Instant cloud synchronization push
+    pushToCloudGist({
+      requests: updatedAllRequests.length > 0 ? updatedAllRequests : requests,
+      notifications: updatedNotifs,
+    });
   };
 
   const addTaskComment = (taskId: string, message: string) => {
     if (!message.trim()) return;
     const timestamp = new Date().toISOString();
+    let updatedAllRequests: ClubRequest[] = [];
 
     setRequests(prev => {
-      return prev.map(req => {
+      updatedAllRequests = prev.map(req => {
         if (!req.tasks.some(t => t.id === taskId)) return req;
 
         const updatedTasks = req.tasks.map(t => {
@@ -1792,6 +1845,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           updatedAt: timestamp,
         };
       });
+      return updatedAllRequests;
+    });
+
+    localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(updatedAllRequests));
+    markLocalDataModified();
+
+    // Instant cloud synchronization push
+    pushToCloudGist({
+      requests: updatedAllRequests.length > 0 ? updatedAllRequests : requests,
     });
   };
 
@@ -1799,9 +1861,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addTaskDetail = (taskId: string, label: string, value: any) => {
     if (!label || !label.trim()) return;
     const timestamp = new Date().toISOString();
+    let updatedAllRequests: ClubRequest[] = [];
 
     setRequests(prev => {
-      return prev.map(req => {
+      updatedAllRequests = prev.map(req => {
         if (!req.tasks.some(t => t.id === taskId)) return req;
 
         const updatedTasks = req.tasks.map(t => {
@@ -1833,16 +1896,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           updatedAt: timestamp,
         };
       });
+      return updatedAllRequests;
     });
+
+    localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(updatedAllRequests));
+    markLocalDataModified();
+    pushToCloudGist({ requests: updatedAllRequests });
   };
 
   // Staff & Admin: Delete a service detail
   const deleteTaskDetail = (taskId: string, keyOrLabel: string) => {
     if (!keyOrLabel) return;
     const timestamp = new Date().toISOString();
+    let updatedAllRequests: ClubRequest[] = [];
 
     setRequests(prev => {
-      return prev.map(req => {
+      updatedAllRequests = prev.map(req => {
         if (!req.tasks.some(t => t.id === taskId)) return req;
 
         const updatedTasks = req.tasks.map(t => {
@@ -1873,7 +1942,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           updatedAt: timestamp,
         };
       });
+      return updatedAllRequests;
     });
+
+    localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(updatedAllRequests));
+    markLocalDataModified();
+    pushToCloudGist({ requests: updatedAllRequests });
   };
 
   // Staff & Admin: Generic task detail update
@@ -1885,9 +1959,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateTaskExternalUrl = (taskId: string, externalUrl: string) => {
     const timestamp = new Date().toISOString();
     const cleanUrl = externalUrl.trim();
+    let updatedAllRequests: ClubRequest[] = [];
 
     setRequests(prev => {
-      return prev.map(req => {
+      updatedAllRequests = prev.map(req => {
         if (!req.tasks.some(t => t.id === taskId)) return req;
 
         const updatedTasks = req.tasks.map(t => {
@@ -1917,15 +1992,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           updatedAt: timestamp,
         };
       });
+      return updatedAllRequests;
     });
+
+    localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(updatedAllRequests));
+    markLocalDataModified();
+    pushToCloudGist({ requests: updatedAllRequests });
   };
 
   // Dynamic Security Guest Management
   const addGuestToTask = (taskId: string, guest: any) => {
     const timestamp = new Date().toISOString();
+    let updatedAllRequests: ClubRequest[] = [];
 
     setRequests(prev => {
-      return prev.map(req => {
+      updatedAllRequests = prev.map(req => {
         if (!req.tasks.some(t => t.id === taskId)) return req;
 
         const updatedTasks = req.tasks.map(t => {
@@ -1950,14 +2031,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           updatedAt: timestamp,
         };
       });
+      return updatedAllRequests;
     });
+
+    localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(updatedAllRequests));
+    markLocalDataModified();
+    pushToCloudGist({ requests: updatedAllRequests });
   };
 
   const removeGuestFromTask = (taskId: string, guestId: string) => {
     const timestamp = new Date().toISOString();
+    let updatedAllRequests: ClubRequest[] = [];
 
     setRequests(prev => {
-      return prev.map(req => {
+      updatedAllRequests = prev.map(req => {
         if (!req.tasks.some(t => t.id === taskId)) return req;
 
         const updatedTasks = req.tasks.map(t => {
@@ -1983,7 +2070,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           updatedAt: timestamp,
         };
       });
+      return updatedAllRequests;
     });
+
+    localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(updatedAllRequests));
+    markLocalDataModified();
+    pushToCloudGist({ requests: updatedAllRequests });
   };
 
   const deleteTask = (taskId: string): { success: boolean; message: string } => {

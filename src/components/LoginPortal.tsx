@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Building2, 
   Users, 
@@ -107,6 +107,7 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
         office: inlineSupOffice.trim() || 'مبنى العمادة / الكلية',
         password: inlineSupPassword.trim() || '123',
         bio: isRtl ? `مشرف أكاديمي معتمد للأندية الطلابية.` : 'Certified Student Clubs Academic Supervisor.',
+        autoLogin: false,
       });
 
       setRegSupervisorId(newSup.id);
@@ -316,6 +317,20 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
   const selectedClubObj = clubAccounts.find(u => u.id === selectedClubUser);
   const selectedSupervisorObj = supervisorAccounts.find(u => u.id === selectedSupervisorId);
   const selectedStaffObj = staffMembers.find(s => s.roleCode === selectedStaffId) || STAFF_MEMBERS.find(s => s.roleCode === selectedStaffId);
+
+  // Auto-sync selectedClubUser if invalid or empty
+  useEffect(() => {
+    if (clubAccounts.length > 0 && (!selectedClubUser || !clubAccounts.some(c => c.id === selectedClubUser))) {
+      setSelectedClubUser(clubAccounts[0].id);
+    }
+  }, [clubAccounts, selectedClubUser]);
+
+  // Auto-sync selectedSupervisorId if invalid or empty
+  useEffect(() => {
+    if (supervisorAccounts.length > 0 && (!selectedSupervisorId || !supervisorAccounts.some(s => s.id === selectedSupervisorId))) {
+      setSelectedSupervisorId(supervisorAccounts[0].id);
+    }
+  }, [supervisorAccounts, selectedSupervisorId]);
 
   return (
     <div className={`min-h-screen bg-gradient-to-br ${currentTheme.bgGradient} text-slate-100 flex flex-col justify-between p-4 sm:p-6 lg:p-8 font-['Cairo',sans-serif] relative overflow-hidden transition-colors duration-500`}>

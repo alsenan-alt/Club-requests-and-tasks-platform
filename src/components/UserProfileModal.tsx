@@ -24,7 +24,8 @@ import {
   EyeOff,
   AlertTriangle,
   Shield,
-  Trash2
+  Trash2,
+  GraduationCap
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { STAFF_MEMBERS, DEPARTMENTS } from '../data/initialData';
@@ -38,17 +39,31 @@ export const UserProfileModal: React.FC = () => {
     changePassword,
     registerNewClubPresident, 
     deleteClubAccount,
+    registerNewSupervisor,
+    deleteSupervisorAccount,
     isUserProfileModalOpen, 
     setIsUserProfileModalOpen,
     requests,
     staffMembers
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'manage_clubs' | 'staff_directory'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'manage_clubs' | 'manage_supervisors' | 'staff_directory'>('profile');
   const [showSaveAlert, setShowSaveAlert] = useState(false);
   const [saveAlertMessage, setSaveAlertMessage] = useState('تم حفظ وتحديث البيانات بنجاح في المنظومة.');
   const [isAddingNewClub, setIsAddingNewClub] = useState(false);
   const [clubToDelete, setClubToDelete] = useState<UserAccount | null>(null);
+
+  // Supervisor management state for Admin
+  const [isAddingNewSupervisor, setIsAddingNewSupervisor] = useState(false);
+  const [supervisorToDelete, setSupervisorToDelete] = useState<UserAccount | null>(null);
+  const [newSupName, setNewSupName] = useState('');
+  const [newSupDept, setNewSupDept] = useState('إشراف الأندية الطلابية');
+  const [newSupTitle, setNewSupTitle] = useState('مشرف أكاديمي معتمد');
+  const [newSupEmail, setNewSupEmail] = useState('');
+  const [newSupPhone, setNewSupPhone] = useState('');
+  const [newSupOffice, setNewSupOffice] = useState('مبنى العمادة / الكلية');
+  const [newSupPassword, setNewSupPassword] = useState('');
+  const [newSupBio, setNewSupBio] = useState('');
 
   // Form State for current user profile
   const [name, setName] = useState('');
@@ -230,6 +245,38 @@ export const UserProfileModal: React.FC = () => {
     setTimeout(() => setShowSaveAlert(false), 3000);
   };
 
+  // Handle Admin Creating New Supervisor
+  const handleAdminCreateSupervisor = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSupName.trim()) {
+      alert('يرجى إدخال اسم المشرف الأكاديمي');
+      return;
+    }
+
+    registerNewSupervisor({
+      name: newSupName.trim(),
+      title: newSupTitle.trim() || 'مشرف أكاديمي معتمد',
+      department: newSupDept.trim() || 'إشراف الأندية الطلابية',
+      email: newSupEmail.trim() || `${newSupName.toLowerCase().replace(/\s+/g, '.')}@kfupm.edu.sa`,
+      phone: newSupPhone.trim(),
+      office: newSupOffice.trim() || 'مبنى العمادة / الكلية',
+      password: newSupPassword.trim() || '123',
+      bio: newSupBio.trim() || 'مشرف أكاديمي معتمد للأندية الطلابية بجامعة الملك فهد للبترول والمعادن.',
+      autoLogin: false,
+    });
+
+    setNewSupName('');
+    setNewSupPhone('');
+    setNewSupEmail('');
+    setNewSupOffice('مبنى العمادة / الكلية');
+    setNewSupPassword('');
+    setNewSupBio('');
+    setIsAddingNewSupervisor(false);
+    setSaveAlertMessage('تم تسجيل واعتماد المشرف الأكاديمي وتفعيل حسابه بنجاح!');
+    setShowSaveAlert(true);
+    setTimeout(() => setShowSaveAlert(false), 3000);
+  };
+
   // Club Request stats for this club
   const clubRequests = requests.filter(r => r.clubName === currentUser.clubName);
   const completedClubRequests = clubRequests.filter(r => r.status === 'completed').length;
@@ -305,6 +352,15 @@ export const UserProfileModal: React.FC = () => {
                 >
                   <Users className="w-3.5 h-3.5" />
                   <span>إدارة الأندية المسجلة ({userAccounts.filter(u => u.role === 'club_president').length})</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab('manage_supervisors')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    activeTab === 'manage_supervisors' ? 'bg-white text-slate-900 shadow-xs' : 'text-white/80 hover:bg-white/10'
+                  }`}
+                >
+                  <GraduationCap className="w-3.5 h-3.5" />
+                  <span>إدارة المشرفين الأكاديميين ({userAccounts.filter(u => u.role === 'club_supervisor').length})</span>
                 </button>
                 <button
                   onClick={() => setActiveTab('staff_directory')}
@@ -1202,6 +1258,237 @@ export const UserProfileModal: React.FC = () => {
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                         <span>نعم، حذف النادي نهائياً</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 4: Manage Academic Supervisors (For Admin) */}
+          {activeTab === 'manage_supervisors' && (
+            <div className="space-y-6 animate-in fade-in">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-amber-50 border border-amber-200 p-4 rounded-2xl">
+                <div>
+                  <h3 className="text-sm font-bold text-amber-950 flex items-center gap-2">
+                    <GraduationCap className="w-4 h-4 text-amber-600" />
+                    <span>لوحة إدارة المشرفين الأكاديميين المعتمدين</span>
+                  </h3>
+                  <p className="text-xs text-amber-800 mt-1">
+                    تسجيل المشرفين الجدد ومتابعة وتعيين صلاحيات الإشراف على الأندية الطلابية
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsAddingNewSupervisor(!isAddingNewSupervisor)}
+                  className={`px-4 py-2 text-xs font-bold rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                    isAddingNewSupervisor 
+                      ? 'bg-slate-200 text-slate-700 hover:bg-slate-300' 
+                      : 'bg-amber-600 text-white hover:bg-amber-700'
+                  }`}
+                >
+                  {isAddingNewSupervisor ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                  <span>{isAddingNewSupervisor ? 'إلغاء الإضافة' : 'إضافة مشرف أكاديمي جديد'}</span>
+                </button>
+              </div>
+
+              {/* Add New Supervisor Form */}
+              {isAddingNewSupervisor && (
+                <form onSubmit={handleAdminCreateSupervisor} className="p-5 bg-white border-2 border-dashed border-amber-300 rounded-2xl space-y-4 shadow-sm animate-in slide-in-from-top-2">
+                  <div className="flex items-center justify-between border-b border-amber-100 pb-2">
+                    <h4 className="text-xs font-bold text-amber-900 flex items-center gap-2">
+                      <GraduationCap className="w-4 h-4 text-amber-600" />
+                      <span>بيانات المشرف الأكاديمي الجديد</span>
+                    </h4>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">اسم المشرف الثلاثي *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="د. خالد بن فهد الشمري"
+                        value={newSupName}
+                        onChange={(e) => setNewSupName(e.target.value)}
+                        className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">المسمى الوظيفي / الأكاديمي</label>
+                      <input
+                        type="text"
+                        placeholder="مشرف أكاديمي / أستاذ مشارك"
+                        value={newSupTitle}
+                        onChange={(e) => setNewSupTitle(e.target.value)}
+                        className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">البريد الجامعي الرسمي</label>
+                      <input
+                        type="email"
+                        placeholder="khalid@kfupm.edu.sa"
+                        value={newSupEmail}
+                        onChange={(e) => setNewSupEmail(e.target.value)}
+                        className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">رقم الجوال للتواصل</label>
+                      <input
+                        type="tel"
+                        placeholder="05XXXXXXXX"
+                        value={newSupPhone}
+                        onChange={(e) => setNewSupPhone(e.target.value)}
+                        className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-left"
+                        dir="ltr"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">الكلية أو القسم الأكاديمي</label>
+                      <input
+                        type="text"
+                        placeholder="كلية علوم وهندسة الحاسب الآلي"
+                        value={newSupDept}
+                        onChange={(e) => setNewSupDept(e.target.value)}
+                        className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">كلمة المرور الابتدائية</label>
+                      <input
+                        type="text"
+                        placeholder="123"
+                        value={newSupPassword}
+                        onChange={(e) => setNewSupPassword(e.target.value)}
+                        className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none text-left font-mono"
+                        dir="ltr"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingNewSupervisor(false)}
+                      className="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+                    >
+                      إلغاء
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl transition-all shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>اعتماد وحفظ المشرف فوراً</span>
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Supervisors List Table */}
+              <div className="divide-y divide-slate-200 border border-slate-200 rounded-2xl overflow-hidden bg-white">
+                {userAccounts.filter(u => u.role === 'club_supervisor').map(supUser => {
+                  const supervisedCount = supUser.supervisedClubNames?.length || 0;
+                  return (
+                    <div key={supUser.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/70 transition-colors">
+                      <div className="flex items-start gap-3">
+                        <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${supUser.avatarBg || 'from-amber-600 to-orange-700'} text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-2xs`}>
+                          🏛️
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-900">{supUser.name}</h4>
+                          <p className="text-[11px] text-slate-500">
+                            {supUser.title} • <span className="text-slate-700 font-semibold">{supUser.department}</span>
+                          </p>
+                          <div className="flex flex-wrap items-center gap-2 mt-1">
+                            <span className="text-[10px] text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full inline-block font-medium">
+                              📧 {supUser.email || 'لا يوجد بريد مسجل'}
+                            </span>
+                            {supUser.phone && (
+                              <span className="text-[10px] text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full inline-block">
+                                📞 {supUser.phone}
+                              </span>
+                            )}
+                            {supUser.office && (
+                              <span className="text-[10px] text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full inline-block">
+                                🏢 {supUser.office}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg">
+                          {supervisedCount > 0 ? `${supervisedCount} أندية مسندة` : 'إشراف عام'}
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() => setSupervisorToDelete(supUser)}
+                          className="px-2.5 py-1 text-xs font-bold text-rose-600 hover:text-white hover:bg-rose-600 border border-rose-200 hover:border-rose-600 rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                          title={`حذف المشرف ${supUser.name}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>حذف</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Confirm Delete Supervisor Modal Dialog */}
+              {supervisorToDelete && (
+                <div className="fixed inset-0 z-60 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+                  <div className="bg-white rounded-2xl p-5 max-w-md w-full border border-rose-200 shadow-2xl space-y-4">
+                    <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+                      <Trash2 className="w-6 h-6" />
+                    </div>
+
+                    <div className="text-center">
+                      <h4 className="text-sm font-bold text-slate-900">تأكيد حذف المشرف الأكاديمي</h4>
+                      <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+                        هل أنت متأكد من رغبتك في حذف حساب المشرف الأكاديمي (<strong className="text-rose-600">{supervisorToDelete.name}</strong>) نهائياً من المنظومة؟
+                      </p>
+                    </div>
+
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <span>تنبيه: سيتم إلغاء صلاحيات الدخول لهذا الحساب وحذفه من قائمة المشرفين المتاحين للأندية.</span>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => setSupervisorToDelete(null)}
+                        className="px-4 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+                      >
+                        إلغاء التراجع
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const res = deleteSupervisorAccount(supervisorToDelete.id);
+                          setSupervisorToDelete(null);
+                          setSaveAlertMessage(res.message);
+                          setShowSaveAlert(true);
+                          setTimeout(() => setShowSaveAlert(false), 3500);
+                        }}
+                        className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition-all shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>نعم، حذف المشرف نهائياً</span>
                       </button>
                     </div>
                   </div>
