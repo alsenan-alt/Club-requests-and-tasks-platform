@@ -51,6 +51,7 @@ export const AdminOverviewView: React.FC<Props> = ({ onOpenRequestDetails }) => 
   const [deletingTarget, setDeletingTarget] = useState<{ task?: Task; request: ClubRequest } | null>(null);
   const [isClearAllModalOpen, setIsClearAllModalOpen] = useState(false);
   const [supervisorNotice, setSupervisorNotice] = useState<string | null>(null);
+  const [supervisorToDelete, setSupervisorToDelete] = useState<{ id: string; name: string } | null>(null);
 
   const supervisorsList = userAccounts.filter(u => u.role === 'club_supervisor');
   const clubsListAccounts = userAccounts.filter(u => u.role === 'club_president');
@@ -318,12 +319,7 @@ export const AdminOverviewView: React.FC<Props> = ({ onOpenRequestDetails }) => 
                       <button
                         type="button"
                         onClick={() => {
-                          if (confirm(`هل أنت متأكد من حذف حساب المشرف (${sup.name}) نهائياً؟`)) {
-                            const res = deleteSupervisorAccount(sup.id);
-                            if (res.success) {
-                              setSupervisorNotice(res.message);
-                            }
-                          }
+                          setSupervisorToDelete({ id: sup.id, name: sup.name });
                         }}
                         className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                         title="حذف هذا المشرف نهائياً"
@@ -488,6 +484,48 @@ export const AdminOverviewView: React.FC<Props> = ({ onOpenRequestDetails }) => 
         isOpen={isClearAllModalOpen}
         onClose={() => setIsClearAllModalOpen(false)}
       />
+
+      {supervisorToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-md w-full p-6 text-right space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto border border-rose-200">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1">
+              <h3 className="text-lg font-bold text-slate-900">
+                تأكيد حذف حساب المشرف
+              </h3>
+              <p className="text-xs text-slate-600">
+                هل أنت متأكد من رغبتك في حذف حساب المشرف الأكاديمي <span className="font-bold text-rose-600">({supervisorToDelete.name})</span> نهائياً؟ سيتم إلغاء ارتباطه بكافة الأندية الطلابية وحذفه من السحابة.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setSupervisorToDelete(null)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 font-bold text-xs transition-colors cursor-pointer"
+              >
+                إلغاء
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const res = deleteSupervisorAccount(supervisorToDelete.id);
+                  if (res.success) {
+                    setSupervisorNotice(res.message);
+                  }
+                  setSupervisorToDelete(null);
+                }}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition-colors cursor-pointer shadow-sm shadow-rose-200"
+              >
+                تأكيد الحذف نهائياً
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

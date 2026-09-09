@@ -174,22 +174,18 @@ export const StaffServicesCatalogManager: React.FC<Props> = ({ staff }) => {
   };
 
   const handleResetService = (serviceId: string, serviceName: string) => {
-    if (window.confirm(`هل ترغب في استعادة جميع الحقول والتفاصيل الافتراضية الأصلية لخدمة (${serviceName})؟`)) {
-      resetServiceToDefault(serviceId);
-      setAlertMessage(`تمت استعادة الحقول الافتراضية لخدمة (${serviceName}) بنجاح!`);
-      setTimeout(() => setAlertMessage(null), 4000);
-    }
+    resetServiceToDefault(serviceId);
+    setAlertMessage(`تمت استعادة الحقول الافتراضية لخدمة (${serviceName}) بنجاح!`);
+    setTimeout(() => setAlertMessage(null), 4000);
   };
 
   const handleDeleteService = (serviceId: string, serviceName: string) => {
-    if (window.confirm(`هل أنت متأكد من رغبتك في حذف خدمة (${serviceName}) بالكامل من قائمة ونماذج الخدمات؟`)) {
-      const res = deleteService(serviceId);
-      setAlertMessage(res.message);
-      if (expandedServiceId === serviceId) {
-        setExpandedServiceId(null);
-      }
-      setTimeout(() => setAlertMessage(null), 4000);
+    const res = deleteService(serviceId);
+    setAlertMessage(res.message);
+    if (expandedServiceId === serviceId) {
+      setExpandedServiceId(null);
     }
+    setTimeout(() => setAlertMessage(null), 4000);
   };
 
   return (

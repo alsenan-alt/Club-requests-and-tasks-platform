@@ -14,6 +14,7 @@ import { StaffReferenceGuideModal } from './components/StaffReferenceGuideModal'
 import { UserProfileModal } from './components/UserProfileModal';
 import { LoginPortal } from './components/LoginPortal';
 import { CloudSyncModal } from './components/CloudSyncModal';
+import { EditRequestModal } from './components/EditRequestModal';
 
 const MainContent: React.FC = () => {
   const {
@@ -24,6 +25,10 @@ const MainContent: React.FC = () => {
     setSelectedRequestId,
     isNewRequestModalOpen,
     setIsNewRequestModalOpen,
+    editingRequest,
+    setEditingRequest,
+    isEditRequestModalOpen,
+    setIsEditRequestModalOpen,
     isQuickServiceModalOpen,
     setIsQuickServiceModalOpen,
     activeQuickServiceId,
@@ -161,6 +166,15 @@ const MainContent: React.FC = () => {
       <NewRequestWizard
         isOpen={isNewRequestModalOpen}
         onClose={() => setIsNewRequestModalOpen(false)}
+      />
+
+      <EditRequestModal
+        isOpen={isEditRequestModalOpen}
+        onClose={() => {
+          setIsEditRequestModalOpen(false);
+          setEditingRequest(null);
+        }}
+        request={editingRequest}
       />
 
       <QuickServiceModal

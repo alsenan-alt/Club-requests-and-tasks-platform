@@ -112,6 +112,22 @@ interface AppContextType {
     budget?: string;
     servicesData: Record<string, { serviceId: string; priority: 'normal' | 'high' | 'urgent'; details: Record<string, any> }>;
   }) => ClubRequest;
+  editAndResubmitRequest: (
+    requestId: string,
+    updatedData: {
+      eventTitle?: string;
+      eventType?: any;
+      eventDate?: string;
+      startTime?: string;
+      endTime?: string;
+      locationSummary?: string;
+      expectedAttendees?: number;
+      description?: string;
+      budget?: string;
+      servicesData?: Record<string, { serviceId: string; priority: 'normal' | 'high' | 'urgent'; details: Record<string, any> }>;
+      presidentNotes?: string;
+    }
+  ) => { success: boolean; message: string; request?: ClubRequest };
   createSingleServiceRequest: (
     serviceId: string, 
     details: Record<string, any>, 
@@ -143,6 +159,10 @@ interface AppContextType {
   setSelectedRequestId: (id: string | null) => void;
   isNewRequestModalOpen: boolean;
   setIsNewRequestModalOpen: (open: boolean) => void;
+  editingRequest: ClubRequest | null;
+  setEditingRequest: (req: ClubRequest | null) => void;
+  isEditRequestModalOpen: boolean;
+  setIsEditRequestModalOpen: (open: boolean) => void;
   isQuickServiceModalOpen: boolean;
   setIsQuickServiceModalOpen: (open: boolean) => void;
   activeQuickServiceId: string | null;
@@ -178,6 +198,26 @@ const STORAGE_KEYS = {
   ACADEMIC_YEAR: 'club_current_academic_year_v2',
   LAST_MODIFIED: 'club_last_modified_timestamp_v2',
   PORTAL_THEME: 'club_portal_theme_v2',
+};
+
+// Robust helper functions for Arabic club name matching & normalization
+export const normalizeClubName = (name?: string): string => {
+  if (!name) return '';
+  return name
+    .trim()
+    .replace(/^نادي\s+/, '')
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+};
+
+export const isSameClubName = (name1?: string, name2?: string): boolean => {
+  if (!name1 || !name2) return false;
+  const n1 = name1.trim();
+  const n2 = name2.trim();
+  if (n1 === n2) return true;
+  return normalizeClubName(n1) === normalizeClubName(n2);
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -310,13 +350,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           
           const updatedParsed = filteredParsed.map(u => {
             const defaultAcc = USER_ACCOUNTS.find(d => d.id === u.id);
+            let baseClubs = u.supervisedClubNames || defaultAcc?.supervisedClubNames || [];
+            // Clean out deleted clubs from supervisor's list
+            baseClubs = baseClubs.filter(c => 
+              !deletedSet.has(c) && 
+              !deletedSet.has(normalizeClubName(c)) && 
+              !deletedSet.has(c.replace(/^نادي\s+/, '')) && 
+              !deletedSet.has(`نادي ${c.replace(/^نادي\s+/, '')}`)
+            );
+
             if (defaultAcc) {
               return {
                 ...defaultAcc,
                 ...u,
-                supervisedClubNames: u.supervisedClubNames || defaultAcc.supervisedClubNames,
+                supervisedClubNames: baseClubs,
                 supervisorId: u.supervisorId || defaultAcc.supervisorId,
                 supervisorName: u.supervisorName || defaultAcc.supervisorName,
+              };
+            }
+            if (u.role === 'club_supervisor') {
+              return {
+                ...u,
+                supervisedClubNames: baseClubs,
               };
             }
             return u;
@@ -326,7 +381,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return merged;
         }
       }
-      return USER_ACCOUNTS.filter(u => !deletedSet.has(u.id) && !deletedSet.has(u.username));
+      return USER_ACCOUNTS
+        .filter(u => !deletedSet.has(u.id) && !deletedSet.has(u.username) && !(u.clubName && deletedSet.has(u.clubName)))
+        .map(u => {
+          if (u.role === 'club_supervisor' && u.supervisedClubNames) {
+            return {
+              ...u,
+              supervisedClubNames: u.supervisedClubNames.filter(c => 
+                !deletedSet.has(c) && 
+                !deletedSet.has(normalizeClubName(c)) && 
+                !deletedSet.has(c.replace(/^نادي\s+/, ''))
+              ),
+            };
+          }
+          return u;
+        });
     } catch (e) {
       console.error(e);
     }
@@ -390,6 +459,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [isNewRequestModalOpen, setIsNewRequestModalOpen] = useState(false);
+  const [editingRequest, setEditingRequest] = useState<ClubRequest | null>(null);
+  const [isEditRequestModalOpen, setIsEditRequestModalOpen] = useState(false);
   const [isQuickServiceModalOpen, setIsQuickServiceModalOpen] = useState(false);
   const [activeQuickServiceId, setActiveQuickServiceId] = useState<string | null>(null);
   const [isUserProfileModalOpen, setIsUserProfileModalOpen] = useState(false);
@@ -459,12 +530,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             'user_supervisor_omari'
           ]);
 
-          const filteredCloudAccounts = cloudData.userAccounts.filter(u => 
-            !deletedAccountSet.has(u.id) && 
-            !deletedAccountSet.has(u.username) && 
-            !(u.clubName && deletedAccountSet.has(u.clubName)) &&
-            !legacyMockSupervisorIds.has(u.id)
-          );
+          const filteredCloudAccounts = cloudData.userAccounts
+            .filter(u => 
+              !deletedAccountSet.has(u.id) && 
+              !deletedAccountSet.has(u.username) && 
+              !(u.clubName && (
+                deletedAccountSet.has(u.clubName) || 
+                deletedAccountSet.has(normalizeClubName(u.clubName)) || 
+                deletedAccountSet.has(`نادي ${normalizeClubName(u.clubName)}`)
+              )) &&
+              !legacyMockSupervisorIds.has(u.id)
+            )
+            .map(u => {
+              if (u.role === 'club_supervisor' && u.supervisedClubNames) {
+                return {
+                  ...u,
+                  supervisedClubNames: u.supervisedClubNames.filter(c => 
+                    !deletedAccountSet.has(c) && 
+                    !deletedAccountSet.has(normalizeClubName(c)) && 
+                    !deletedAccountSet.has(c.replace(/^نادي\s+/, '')) && 
+                    !deletedAccountSet.has(`نادي ${c.replace(/^نادي\s+/, '')}`)
+                  )
+                };
+              }
+              return u;
+            });
 
           const cloudIds = new Set(filteredCloudAccounts.map(u => u.id));
           // Only add default essential staff/admin accounts if missing, never resurrect deleted clubs/supervisors
@@ -810,12 +900,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Update user accounts including the new account and update supervisor's supervisedClubNames
     let updatedAccounts: UserAccount[] = [];
     const prevAccounts = userAccounts;
-    const baseUpdated = [newAccount, ...prevAccounts.filter(u => u.id !== newUserId && u.clubName !== cleanClubName)];
+    const baseUpdated = [newAccount, ...prevAccounts.filter(u => u.id !== newUserId && !isSameClubName(u.clubName, cleanClubName))];
     if (newAccount.supervisorId) {
       updatedAccounts = baseUpdated.map(u => {
-        if (u.id === newAccount.supervisorId) {
+        if (u.id === newAccount.supervisorId || (newAccount.supervisorName && u.name === newAccount.supervisorName)) {
           const existingClubs = u.supervisedClubNames || [];
-          if (!existingClubs.includes(cleanClubName)) {
+          if (!existingClubs.some(c => isSameClubName(c, cleanClubName))) {
             return {
               ...u,
               supervisedClubNames: [...existingClubs, cleanClubName]
@@ -837,7 +927,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const deletedIdsSaved = localStorage.getItem(STORAGE_KEYS.DELETED_ACCOUNTS);
       if (deletedIdsSaved) {
         const deletedIds: string[] = JSON.parse(deletedIdsSaved);
-        cleanDeletedIds = deletedIds.filter(id => id !== newUserId && id !== newAccount.username && id !== cleanClubName);
+        cleanDeletedIds = deletedIds.filter(id => 
+          id !== newUserId && 
+          id !== newAccount.username && 
+          !isSameClubName(id, cleanClubName) && 
+          !isSameClubName(id, formData.clubName)
+        );
         localStorage.setItem(STORAGE_KEYS.DELETED_ACCOUNTS, JSON.stringify(cleanDeletedIds));
       }
     } catch (e) {}
@@ -846,6 +941,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCurrentUser(newAccount);
       localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(newAccount));
       setSelectedRequestId(null);
+    } else if (currentUser) {
+      const freshUser = updatedAccounts.find(u => u.id === currentUser.id);
+      if (freshUser) {
+        setCurrentUser(freshUser);
+        localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(freshUser));
+      }
     }
 
     // Welcome & Supervisor Notifications
@@ -1017,7 +1118,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Delete Supervisor Account
   const deleteSupervisorAccount = (supervisorId: string): { success: boolean; message: string } => {
-    const target = userAccounts.find(u => u.id === supervisorId);
+    const target = userAccounts.find(u => u.id === supervisorId || u.username === supervisorId);
     if (!target) {
       return { success: false, message: 'لم يتم العثور على حساب المشرف المحدد' };
     }
@@ -1033,17 +1134,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const deletedIdsSaved = localStorage.getItem(STORAGE_KEYS.DELETED_ACCOUNTS);
       const deletedIds: string[] = deletedIdsSaved ? JSON.parse(deletedIdsSaved) : [];
-      updatedDeletedIds = Array.from(new Set([...deletedIds, supervisorId, supUsername, supName]));
+      updatedDeletedIds = Array.from(new Set([...deletedIds, supervisorId, target.id, supUsername, supName].filter(Boolean)));
       localStorage.setItem(STORAGE_KEYS.DELETED_ACCOUNTS, JSON.stringify(updatedDeletedIds));
     } catch (e) {
       console.error('Error saving deleted supervisor:', e);
     }
 
-    const updatedAccounts = userAccounts
-      .filter(u => u.id !== supervisorId && u.username !== supUsername)
+    const cleanedAccounts = userAccounts
+      .filter(u => u.id !== supervisorId && u.id !== target.id && u.username !== supUsername)
       .map(u => {
         // Clear supervisor link if this supervisor was assigned to clubs
-        if (u.supervisorId === supervisorId || u.supervisorName === supName) {
+        if (u.supervisorId === supervisorId || u.supervisorId === target.id || (u.supervisorName && isSameClubName(u.supervisorName, supName))) {
           return {
             ...u,
             supervisorId: undefined,
@@ -1053,14 +1154,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return u;
       });
 
-    setUserAccounts(updatedAccounts);
-    localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(updatedAccounts));
+    setUserAccounts(cleanedAccounts);
+    localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(cleanedAccounts));
 
-    if (currentUser?.id === supervisorId) {
-      const fallbackUser = updatedAccounts.find(u => u.role === 'admin') || updatedAccounts[0];
-      setCurrentUser(fallbackUser);
-      if (fallbackUser) {
-        localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(fallbackUser));
+    if (currentUser) {
+      if (currentUser.id === supervisorId || currentUser.id === target.id) {
+        const fallbackUser = cleanedAccounts.find(u => u.role === 'admin') || cleanedAccounts[0];
+        setCurrentUser(fallbackUser);
+        if (fallbackUser) {
+          localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(fallbackUser));
+        }
+      } else {
+        const freshUser = cleanedAccounts.find(u => u.id === currentUser.id);
+        if (freshUser) {
+          setCurrentUser(freshUser);
+          localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(freshUser));
+        }
       }
     }
 
@@ -1081,19 +1190,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ]);
 
     // Instant cloud synchronization push
-    setTimeout(() => {
-      pushToCloudGist({
-        userAccounts: updatedAccounts,
-        deletedAccountIds: updatedDeletedIds,
-      });
-    }, 50);
+    pushToCloudGist({
+      userAccounts: cleanedAccounts,
+      deletedAccountIds: updatedDeletedIds,
+    });
 
     return { success: true, message: `تم حذف حساب المشرف (${supName}) نهائياً` };
   };
 
   // Delete Club Account (Admin capability)
   const deleteClubAccount = (clubUserId: string): { success: boolean; message: string } => {
-    const target = userAccounts.find(u => u.id === clubUserId);
+    const target = userAccounts.find(u => 
+      u.id === clubUserId || 
+      u.username === clubUserId || 
+      (u.clubName && isSameClubName(u.clubName, clubUserId)) ||
+      (u.name && isSameClubName(u.name, clubUserId))
+    );
+
     if (!target) {
       return { success: false, message: 'لم يتم العثور على حساب النادي المحدد' };
     }
@@ -1103,40 +1216,82 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const clubNameToDelete = target.clubName || target.name;
     const clubUsername = target.username;
+    const cleanWithoutNadi = clubNameToDelete.replace(/^نادي\s+/, '').trim();
+    const cleanWithNadi = clubNameToDelete.startsWith('نادي ') ? clubNameToDelete : `نادي ${clubNameToDelete}`;
 
     let updatedDeletedIds: string[] = [];
     try {
       const deletedIdsSaved = localStorage.getItem(STORAGE_KEYS.DELETED_ACCOUNTS);
       const deletedIds: string[] = deletedIdsSaved ? JSON.parse(deletedIdsSaved) : [];
-      updatedDeletedIds = Array.from(new Set([...deletedIds, clubUserId, clubUsername, clubNameToDelete]));
+      updatedDeletedIds = Array.from(new Set([
+        ...deletedIds, 
+        clubUserId, 
+        target.id, 
+        clubUsername, 
+        clubNameToDelete,
+        cleanWithoutNadi,
+        cleanWithNadi,
+        normalizeClubName(clubNameToDelete),
+        target.clubName || '',
+        target.name || ''
+      ].filter(Boolean)));
       localStorage.setItem(STORAGE_KEYS.DELETED_ACCOUNTS, JSON.stringify(updatedDeletedIds));
     } catch (e) {
       console.error('Error saving deleted club:', e);
     }
 
-    const updatedAccounts = userAccounts.filter(u => u.id !== clubUserId && u.username !== clubUsername && u.clubName !== clubNameToDelete);
-    setUserAccounts(updatedAccounts);
-    localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(updatedAccounts));
+    // Filter out deleted club account AND remove club from all supervisors' supervisedClubNames
+    const cleanedAccounts = userAccounts
+      .filter(u => {
+        if (u.id === clubUserId || u.id === target.id) return false;
+        if (target.username && u.username === target.username) return false;
+        if (u.role === 'club_president' && (
+          isSameClubName(u.clubName, clubNameToDelete) || 
+          isSameClubName(u.name, clubNameToDelete) ||
+          isSameClubName(u.clubName, cleanWithoutNadi) ||
+          isSameClubName(u.clubName, cleanWithNadi)
+        )) return false;
+        return true;
+      })
+      .map(u => {
+        if (u.role === 'club_supervisor') {
+          const currentSupervised = u.supervisedClubNames || [];
+          const filtered = currentSupervised.filter(c => 
+            !isSameClubName(c, clubNameToDelete) &&
+            !isSameClubName(c, cleanWithoutNadi) &&
+            !isSameClubName(c, cleanWithNadi) &&
+            !isSameClubName(c, target.clubName) &&
+            !isSameClubName(c, target.name)
+          );
+          return {
+            ...u,
+            supervisedClubNames: filtered,
+          };
+        }
+        return u;
+      });
 
-    // Also remove from any supervisor's supervisedClubNames
-    const cleanedAccounts = updatedAccounts.map(u => {
-      if (u.supervisedClubNames && u.supervisedClubNames.includes(clubNameToDelete)) {
-        return {
-          ...u,
-          supervisedClubNames: u.supervisedClubNames.filter(c => c !== clubNameToDelete),
-        };
-      }
-      return u;
-    });
     setUserAccounts(cleanedAccounts);
     localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(cleanedAccounts));
 
-    // If current logged-in user is this deleted club, auto-switch to admin or default
-    if (currentUser?.id === clubUserId || currentUser?.clubName === clubNameToDelete) {
-      const fallbackUser = cleanedAccounts.find(u => u.role === 'admin') || cleanedAccounts[0];
-      setCurrentUser(fallbackUser);
-      if (fallbackUser) {
-        localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(fallbackUser));
+    // If current logged-in user is this deleted club or supervisor, refresh currentUser immediately
+    if (currentUser) {
+      if (
+        currentUser.id === clubUserId || 
+        currentUser.id === target.id || 
+        (currentUser.clubName && isSameClubName(currentUser.clubName, clubNameToDelete))
+      ) {
+        const fallbackUser = cleanedAccounts.find(u => u.role === 'admin') || cleanedAccounts[0];
+        setCurrentUser(fallbackUser);
+        if (fallbackUser) {
+          localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(fallbackUser));
+        }
+      } else {
+        const freshUser = cleanedAccounts.find(u => u.id === currentUser.id);
+        if (freshUser) {
+          setCurrentUser(freshUser);
+          localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(freshUser));
+        }
       }
     }
 
@@ -1148,7 +1303,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       {
         id: `notif-del-${Date.now()}`,
         title: `حذف نادي: ${clubNameToDelete}`,
-        message: `تم حذف حساب ${clubNameToDelete} نهائياً من سجل الأندية الطلابية.`,
+        message: `تم حذف حساب ${clubNameToDelete} نهائياً وإلغاء ارتباطه بقائمة المشرف الأكاديمي.`,
         targetRole: 'admin',
         timestamp,
         read: false,
@@ -1158,20 +1313,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ]);
 
     // Instant cloud synchronization push
-    setTimeout(() => {
-      const updatedClubs = Array.from(new Set([
-        ...cleanedAccounts.filter(u => u.role === 'club_president' && u.clubName).map(u => u.clubName!),
-        ...CLUBS_LIST.filter(c => c !== clubNameToDelete)
-      ]));
+    const updatedClubs = Array.from(new Set([
+      ...cleanedAccounts.filter(u => u.role === 'club_president' && u.clubName).map(u => u.clubName!),
+      ...CLUBS_LIST.filter(c => !isSameClubName(c, clubNameToDelete) && !isSameClubName(c, cleanWithoutNadi))
+    ]));
 
-      pushToCloudGist({
-        userAccounts: cleanedAccounts,
-        clubsList: updatedClubs,
-        deletedAccountIds: updatedDeletedIds,
-      });
-    }, 50);
+    pushToCloudGist({
+      userAccounts: cleanedAccounts,
+      clubsList: updatedClubs,
+      deletedAccountIds: updatedDeletedIds,
+    });
 
-    return { success: true, message: `تم حذف حساب (${clubNameToDelete}) من المنظومة بنجاح` };
+    return { success: true, message: `تم حذف حساب (${clubNameToDelete}) وفك ارتباطه بقائمة المشرف الأكاديمي نهائياً` };
   };
 
   // Update user profile
@@ -1719,6 +1872,143 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         },
       },
     });
+  };
+
+  // Edit and Resubmit Request (for Club President when Supervisor requests revisions/info)
+  const editAndResubmitRequest = (
+    requestId: string,
+    updatedData: {
+      eventTitle?: string;
+      eventType?: any;
+      eventDate?: string;
+      startTime?: string;
+      endTime?: string;
+      locationSummary?: string;
+      expectedAttendees?: number;
+      description?: string;
+      budget?: string;
+      servicesData?: Record<string, { serviceId: string; priority: 'normal' | 'high' | 'urgent'; details: Record<string, any> }>;
+      presidentNotes?: string;
+    }
+  ): { success: boolean; message: string; request?: ClubRequest } => {
+    const timestamp = new Date().toISOString();
+    const currentReq = requests.find(r => r.id === requestId);
+    if (!currentReq) {
+      return { success: false, message: 'لم يتم العثور على الطلب المحدد' };
+    }
+
+    // Generate or update tasks
+    let updatedTasks: Task[] = currentReq.tasks;
+    if (updatedData.servicesData) {
+      updatedTasks = Object.entries(updatedData.servicesData).map(([srvKey, srvData], index) => {
+        const existingTask = currentReq.tasks.find(t => t.serviceId === srvData.serviceId);
+        const srvDef = services.find(s => s.id === srvData.serviceId) || AVAILABLE_SERVICES.find(s => s.id === srvData.serviceId);
+        const deptDef = srvDef ? DEPARTMENTS[srvDef.departmentId] : undefined;
+        const staff = staffMembers.find(sm => sm.id === srvDef?.staffId) || STAFF_MEMBERS.find(sm => sm.id === srvDef?.staffId);
+
+        if (existingTask) {
+          return {
+            ...existingTask,
+            priority: srvData.priority || existingTask.priority || 'normal',
+            details: srvData.details,
+            updatedAt: timestamp,
+          };
+        }
+
+        return {
+          id: `TSK-${Date.now()}-${index + 1}`,
+          requestId: currentReq.id,
+          serviceId: srvData.serviceId,
+          serviceName: srvDef?.name || 'خدمة محددة',
+          departmentId: srvDef?.departmentId || 'events_buildings',
+          departmentName: deptDef?.name || 'القسم المعني',
+          staffId: srvDef?.staffId || 'hussein_ramadan',
+          staffName: staff?.shortName || 'الموظف المعني',
+          status: 'pending' as TaskStatus,
+          priority: srvData.priority || 'normal',
+          details: srvData.details,
+          comments: [],
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        };
+      });
+    }
+
+    const hasSupervisor = Boolean(currentReq.supervisorId || currentReq.supervisorName);
+    const newSupervisorStatus = hasSupervisor ? 'pending' : 'approved';
+    const newRequestStatus: RequestStatus = hasSupervisor ? 'pending_supervisor' : 'submitted';
+
+    const updatedRequest: ClubRequest = {
+      ...currentReq,
+      eventTitle: updatedData.eventTitle !== undefined ? updatedData.eventTitle : currentReq.eventTitle,
+      eventType: updatedData.eventType !== undefined ? updatedData.eventType : currentReq.eventType,
+      eventDate: updatedData.eventDate !== undefined ? updatedData.eventDate : currentReq.eventDate,
+      startTime: updatedData.startTime !== undefined ? updatedData.startTime : currentReq.startTime,
+      endTime: updatedData.endTime !== undefined ? updatedData.endTime : currentReq.endTime,
+      locationSummary: updatedData.locationSummary !== undefined ? updatedData.locationSummary : currentReq.locationSummary,
+      expectedAttendees: updatedData.expectedAttendees !== undefined ? updatedData.expectedAttendees : currentReq.expectedAttendees,
+      description: updatedData.description !== undefined ? updatedData.description : currentReq.description,
+      budget: updatedData.budget !== undefined ? updatedData.budget : currentReq.budget,
+      tasks: updatedTasks,
+      supervisorStatus: newSupervisorStatus,
+      status: newRequestStatus,
+      updatedAt: timestamp,
+    };
+
+    const nextRequests = requests.map(r => r.id === requestId ? updatedRequest : r);
+
+    // Notifications
+    const newNotifs: NotificationItem[] = [
+      {
+        id: `notif-${Date.now()}-sup-edited`,
+        title: `تعديل وإعادة إرسال فعالية: ${updatedRequest.eventTitle}`,
+        message: `قام رئيس نادي (${updatedRequest.clubName}) بتحديث وتعديل بيانات الفعالية وإعادة إرسالها للاعتماد.${updatedData.presidentNotes ? ` رد النادي: "${updatedData.presidentNotes}"` : ''}`,
+        targetRole: 'club_supervisor',
+        requestId: updatedRequest.id,
+        timestamp,
+        read: false,
+        type: 'new_request',
+      },
+      {
+        id: `notif-${Date.now()}-pres-edited`,
+        title: `تم إرسال التعديلات بنجاح`,
+        message: `تم تحديث بيانات فعالية (${updatedRequest.eventTitle}) وإعادة إرسالها لمشرف النادي (${updatedRequest.supervisorName || 'المشرف الأكاديمي'}) للاعتماد.`,
+        targetRole: 'club_president',
+        requestId: updatedRequest.id,
+        timestamp,
+        read: false,
+        type: 'status_change',
+      },
+    ];
+
+    const nextNotifications = [...newNotifs, ...notifications];
+
+    setRequests(nextRequests);
+    setNotifications(nextNotifications);
+    localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(nextRequests));
+    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(nextNotifications));
+
+    markLocalDataModified();
+
+    pushToCloudGist({
+      requests: nextRequests,
+      notifications: nextNotifications,
+    });
+
+    try {
+      confetti({
+        particleCount: 70,
+        spread: 60,
+        origin: { y: 0.6 },
+        colors: ['#059669', '#3b82f6', '#f59e0b', '#10b981']
+      });
+    } catch (e) {}
+
+    return {
+      success: true,
+      message: `تم تحديث بيانات فعالية (${updatedRequest.eventTitle}) وإعادة إرسالها للمشرف الأكاديمي بنجاح`,
+      request: updatedRequest,
+    };
   };
 
   const updateTaskStatus = (
@@ -2577,6 +2867,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         markNotificationAsRead,
         markAllNotificationsAsRead,
         createNewRequest,
+        editAndResubmitRequest,
         createSingleServiceRequest,
         updateTaskStatus,
         addTaskComment,
@@ -2600,6 +2891,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setSelectedRequestId,
         isNewRequestModalOpen,
         setIsNewRequestModalOpen,
+        editingRequest,
+        setEditingRequest,
+        isEditRequestModalOpen,
+        setIsEditRequestModalOpen,
         isQuickServiceModalOpen,
         setIsQuickServiceModalOpen,
         activeQuickServiceId,

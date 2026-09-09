@@ -56,7 +56,9 @@ export const ClubPresidentView: React.FC<Props> = ({
     services,
     deleteTask,
     deleteRequest,
-    staffMembers
+    staffMembers,
+    setEditingRequest,
+    setIsEditRequestModalOpen
   } = useApp();
 
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -206,9 +208,9 @@ export const ClubPresidentView: React.FC<Props> = ({
 
       {/* Revisions Needed Alert Banner */}
       {displayedRequests.some(r => r.supervisorStatus === 'needs_info') && (
-        <div className="p-4 sm:p-5 rounded-2xl bg-amber-50 border-2 border-amber-400 text-amber-950 flex items-center justify-between gap-4 shadow-sm animate-in fade-in">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold text-xl shrink-0">
+        <div className="p-4 sm:p-5 rounded-2xl bg-amber-50 border-2 border-amber-400 text-amber-950 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm animate-in fade-in">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold text-xl shrink-0 shadow-xs">
               ⚠️
             </div>
             <div>
@@ -216,16 +218,31 @@ export const ClubPresidentView: React.FC<Props> = ({
                 تنبيه: لديك {displayedRequests.filter(r => r.supervisorStatus === 'needs_info').length} طلب فعالية يتطلب تعديلات وملاحظات من المشرف الأكاديمي
               </h4>
               <p className="text-xs text-amber-800 mt-0.5">
-                قام مشرف النادي بمراجعة الطلب وطلب بعض التعديلات أو الاستفسارات الإضافية قبل إحالة المهام للموظفين التنفيذيين.
+                قام مشرف النادي بمراجعة الطلب وطلب بعض التعديلات أو الاستفسارات الإضافية. يمكنك تعديل الطلب واستيفاء المطلوب وإعادة إرساله فوراً.
               </p>
             </div>
           </div>
-          <button
-            onClick={() => setFilterStatus('needs_info')}
-            className="px-3.5 py-2 bg-amber-700 hover:bg-amber-800 text-white text-xs font-bold rounded-xl shrink-0 cursor-pointer shadow-xs"
-          >
-            عرض الطلبات المطلوب تعديلها
-          </button>
+          <div className="flex items-center gap-2 self-end md:self-center shrink-0 flex-wrap">
+            <button
+              onClick={() => {
+                const target = displayedRequests.find(r => r.supervisorStatus === 'needs_info');
+                if (target) {
+                  setEditingRequest(target);
+                  setIsEditRequestModalOpen(true);
+                }
+              }}
+              className="px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer flex items-center gap-1.5"
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              <span>تعديل الطلب واستيفاء الملاحظات</span>
+            </button>
+            <button
+              onClick={() => setFilterStatus('needs_info')}
+              className="px-3.5 py-2 bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded-xl shrink-0 cursor-pointer shadow-xs"
+            >
+              عرض القائمة
+            </button>
+          </div>
         </div>
       )}
 
@@ -428,6 +445,22 @@ export const ClubPresidentView: React.FC<Props> = ({
                         <span>التقرير والطباعة</span>
                       </button>
 
+                      {/* Edit Request Button (Available for Pending & Needs Info) */}
+                      {(req.supervisorStatus === 'needs_info' || req.supervisorStatus === 'pending' || req.status === 'pending_supervisor') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingRequest(req);
+                            setIsEditRequestModalOpen(true);
+                          }}
+                          className="px-3 py-2 text-xs font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 shadow-xs"
+                          title="تعديل بيانات الفعالية والخدمات"
+                        >
+                          <Edit3 className="w-3.5 h-3.5 text-amber-600" />
+                          <span className="hidden sm:inline">تعديل الطلب</span>
+                        </button>
+                      )}
+
                       {/* Delete / Cancel Request Button */}
                       <button
                         type="button"
@@ -452,7 +485,7 @@ export const ClubPresidentView: React.FC<Props> = ({
 
                   {/* Supervisor Review & Revision Notes Banner if Applicable */}
                   {req.supervisorStatus === 'needs_info' && (
-                    <div className="mx-5 sm:mx-6 mb-3 p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-950 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in">
+                    <div className="mx-5 sm:mx-6 mb-3 p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-950 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-3 animate-in fade-in">
                       <div className="flex items-start gap-3">
                         <div className="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold text-lg shrink-0 shadow-xs">
                           ⚠️
@@ -472,12 +505,24 @@ export const ClubPresidentView: React.FC<Props> = ({
                         </div>
                       </div>
 
-                      <button
-                        onClick={() => onOpenRequestDetails(req.id)}
-                        className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors shrink-0 cursor-pointer flex items-center gap-1.5 self-end sm:self-center"
-                      >
-                        <span>عرض التفاصيل والمراسلة</span>
-                      </button>
+                      <div className="flex items-center gap-2 self-end md:self-center shrink-0 flex-wrap">
+                        <button
+                          onClick={() => {
+                            setEditingRequest(req);
+                            setIsEditRequestModalOpen(true);
+                          }}
+                          className="px-4 py-2 bg-gradient-to-r from-amber-600 to-emerald-600 hover:from-amber-700 hover:to-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors shrink-0 cursor-pointer flex items-center gap-1.5"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>تعديل الطلب وإعادة الإرسال</span>
+                        </button>
+                        <button
+                          onClick={() => onOpenRequestDetails(req.id)}
+                          className="px-3.5 py-2 bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded-xl transition-colors shrink-0 cursor-pointer"
+                        >
+                          عرض التفاصيل
+                        </button>
+                      </div>
                     </div>
                   )}
 

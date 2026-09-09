@@ -17,7 +17,8 @@ import {
   MessageSquare,
   ShieldCheck,
   FileText,
-  Trash2
+  Trash2,
+  Edit3
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { STAFF_MEMBERS, DEPARTMENTS } from '../data/initialData';
@@ -40,7 +41,9 @@ export const RequestDetailsModal: React.FC<Props> = ({ requestId, onClose }) => 
     deleteTask,
     deleteRequest,
     staffMembers,
-    userAccounts
+    userAccounts,
+    setEditingRequest,
+    setIsEditRequestModalOpen
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'print_form'>('overview');
@@ -89,6 +92,22 @@ export const RequestDetailsModal: React.FC<Props> = ({ requestId, onClose }) => 
           </div>
 
           <div className="flex items-center gap-2">
+            {(currentRole === 'club_president' || currentRole === 'admin') && (request.supervisorStatus === 'needs_info' || request.supervisorStatus === 'pending' || request.status === 'pending_supervisor') && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  setEditingRequest(request);
+                  setIsEditRequestModalOpen(true);
+                }}
+                className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+                title="تعديل تفاصيل الفعالية وإعادة إرسالها"
+              >
+                <Edit3 className="w-4 h-4" />
+                <span>تعديل الطلب</span>
+              </button>
+            )}
+
             <button
               onClick={() => setActiveTab(activeTab === 'overview' ? 'print_form' : 'overview')}
               className="px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
@@ -215,6 +234,23 @@ export const RequestDetailsModal: React.FC<Props> = ({ requestId, onClose }) => 
                       <div className="mt-2 p-3 rounded-xl bg-white border border-amber-200 text-xs font-semibold leading-relaxed text-slate-800">
                         {request.supervisorNotes || 'لا توجد ملاحظات إضافية مكتوبة.'}
                       </div>
+                      
+                      {(currentRole === 'club_president' || currentRole === 'admin') && request.supervisorStatus === 'needs_info' && (
+                        <div className="mt-3 flex items-center justify-end">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onClose();
+                              setEditingRequest(request);
+                              setIsEditRequestModalOpen(true);
+                            }}
+                            className="px-4 py-2 bg-gradient-to-r from-amber-600 to-emerald-600 hover:from-amber-700 hover:to-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                            <span>تعديل بيانات الفعالية والخدمات وإعادة الإرسال للمشرف الأكاديمي</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
