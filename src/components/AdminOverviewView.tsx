@@ -52,6 +52,7 @@ export const AdminOverviewView: React.FC<Props> = ({ onOpenRequestDetails }) => 
   const [isClearAllModalOpen, setIsClearAllModalOpen] = useState(false);
   const [supervisorNotice, setSupervisorNotice] = useState<string | null>(null);
   const [supervisorToDelete, setSupervisorToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [clubToDelete, setClubToDelete] = useState<{ id: string; name: string } | null>(null);
 
   const supervisorsList = userAccounts.filter(u => u.role === 'club_supervisor');
   const clubsListAccounts = userAccounts.filter(u => u.role === 'club_president');
@@ -377,6 +378,120 @@ export const AdminOverviewView: React.FC<Props> = ({ onOpenRequestDetails }) => 
         )}
       </div>
 
+      {/* Registered Student Clubs Registry & Oversight Card */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="p-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Building2 className="w-5 h-5 text-emerald-600" />
+            <div>
+              <h3 className="text-base font-bold text-slate-900">
+                سجل الأندية الطلابية المعتمدة ({clubsListAccounts.length} نادياً)
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                متابعة رؤساء الأندية المسجلين، المشرف الأكاديمي المرتبط، وتاريخ وإحصائيات الفعاليات
+              </p>
+            </div>
+          </div>
+          <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
+            🏛️ الأندية النشطة في المنظومة
+          </span>
+        </div>
+
+        {clubsListAccounts.length === 0 ? (
+          <div className="p-8 text-center bg-slate-50/70 rounded-2xl border border-dashed border-slate-200 m-5">
+            <Building2 className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+            <h4 className="text-sm font-bold text-slate-700">لا توجد أندية طلابية مسجلة حالياً</h4>
+            <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+              يمكن لرؤساء الأندية الجدد إنشاء حساباتهم مباشرة من صفحة تسجيل الدخول، وستظهر فوراً في هذا السجل المعتمد.
+            </p>
+          </div>
+        ) : (
+          <div className="p-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {clubsListAccounts.map(clubAcc => {
+              const clubName = clubAcc.clubName || clubAcc.name;
+              const matchingRequests = requests.filter(r => r.clubName === clubName);
+              const completedCount = matchingRequests.filter(r => r.status === 'completed').length;
+              const pendingCount = matchingRequests.filter(r => r.status === 'pending_supervisor' || r.status === 'submitted' || r.status === 'in_progress').length;
+
+              return (
+                <div 
+                  key={clubAcc.id}
+                  className="p-4 rounded-2xl bg-gradient-to-br from-slate-50 to-emerald-50/30 border border-slate-200 hover:border-emerald-300 transition-all flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-600 to-emerald-800 text-white flex items-center justify-center font-bold text-base shrink-0 shadow-sm">
+                          🏛️
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-slate-900">{clubName}</h4>
+                          <span className="text-[11px] text-emerald-700 font-semibold block">
+                            الرئيس: {clubAcc.name}
+                          </span>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setClubToDelete({ id: clubAcc.id, name: clubName });
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                        title="حذف هذا النادي نهائياً"
+                      >
+                        <Trash2 className="w-4 h-4 text-rose-500" />
+                      </button>
+                    </div>
+
+                    <div className="mt-3 pt-2.5 border-t border-slate-100 text-xs space-y-1.5 text-slate-600">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-slate-500">المشرف الأكاديمي:</span>
+                        <span className="font-bold text-[11px] text-slate-800">
+                          {clubAcc.supervisorName ? `👨‍🏫 ${clubAcc.supervisorName}` : 'غير محدد'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-slate-500">البريد الجامعي:</span>
+                        <span className="font-mono text-[11px] text-slate-800">{clubAcc.email}</span>
+                      </div>
+                      {clubAcc.phone && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] text-slate-500">جوال التواصل:</span>
+                          <span className="font-mono text-[11px] text-slate-800">{clubAcc.phone}</span>
+                        </div>
+                      )}
+                      {clubAcc.category && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] text-slate-500">التصنيف:</span>
+                          <span className="font-medium text-[11px] text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
+                            {clubAcc.category}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-2.5 border-t border-slate-200 flex items-center justify-between text-xs">
+                    <span className="text-[11px] text-slate-500">إجمالي الفعاليات:</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold px-2 py-0.5 rounded-full text-[10px] bg-slate-100 text-slate-700">
+                        {matchingRequests.length} طلبات
+                      </span>
+                      {completedCount > 0 && (
+                        <span className="font-bold px-2 py-0.5 rounded-full text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          {completedCount} منجزة
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {/* Full Requests Registry Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="p-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
@@ -517,6 +632,48 @@ export const AdminOverviewView: React.FC<Props> = ({ onOpenRequestDetails }) => 
                     setSupervisorNotice(res.message);
                   }
                   setSupervisorToDelete(null);
+                }}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition-colors cursor-pointer shadow-sm shadow-rose-200"
+              >
+                تأكيد الحذف نهائياً
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {clubToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-md w-full p-6 text-right space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto border border-rose-200">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1">
+              <h3 className="text-lg font-bold text-slate-900">
+                تأكيد حذف النادي الطلابي
+              </h3>
+              <p className="text-xs text-slate-600">
+                هل أنت متأكد من رغبتك في حذف حساب <span className="font-bold text-rose-600">({clubToDelete.name})</span> نهائياً؟ سيتم إلغاء تسجيل النادي وإزالته من سجل المشرفين وقاعدة البيانات السحابية.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setClubToDelete(null)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 font-bold text-xs transition-colors cursor-pointer"
+              >
+                إلغاء
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const res = deleteClubAccount(clubToDelete.id);
+                  if (res.success) {
+                    setSupervisorNotice(res.message);
+                  }
+                  setClubToDelete(null);
                 }}
                 className="flex-1 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition-colors cursor-pointer shadow-sm shadow-rose-200"
               >

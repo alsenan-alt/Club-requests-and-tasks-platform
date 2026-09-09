@@ -153,6 +153,10 @@ export interface ClubRequest {
   supervisorApprovalDate?: string;
   supervisorNotes?: string;
   supervisorStatus?: 'pending' | 'approved' | 'rejected' | 'needs_info';
+  isResubmitted?: boolean;
+  lastResubmittedAt?: string;
+  presidentReplyNotes?: string;
+  revisionsCount?: number;
   eventTitle: string;
   eventType: 'workshop' | 'hackathon' | 'exhibition' | 'lecture' | 'sports' | 'trip' | 'other';
   eventDate: string;

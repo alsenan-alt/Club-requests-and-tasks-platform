@@ -23,7 +23,9 @@ import {
   Award,
   Layers,
   MapPin,
-  ArrowRight
+  ArrowRight,
+  RotateCw,
+  History
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ClubRequest, TaskStatus } from '../types';
@@ -45,7 +47,7 @@ export const ClubSupervisorView: React.FC<Props> = ({ onOpenRequestDetails }) =>
     staffMembers
   } = useApp();
 
-  const [activeSubTab, setActiveSubTab] = useState<'pending' | 'approved' | 'all'>('pending');
+  const [activeSubTab, setActiveSubTab] = useState<'pending' | 'resubmitted' | 'approved' | 'all'>('pending');
   const [selectedClubFilter, setSelectedClubFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -66,10 +68,14 @@ export const ClubSupervisorView: React.FC<Props> = ({ onOpenRequestDetails }) =>
   const supervisorRequests = visibleRequests;
 
   const pendingRequests = supervisorRequests.filter(r => r.status === 'pending_supervisor' || r.supervisorStatus === 'pending' || r.supervisorStatus === 'needs_info');
+  const resubmittedRequests = supervisorRequests.filter(r => (r.isResubmitted || (r.revisionsCount && r.revisionsCount > 0)) && (r.status === 'pending_supervisor' || r.supervisorStatus === 'pending' || r.supervisorStatus === 'needs_info'));
   const approvedRequests = supervisorRequests.filter(r => r.supervisorStatus === 'approved' || r.status !== 'pending_supervisor');
 
   const filteredRequests = supervisorRequests.filter(req => {
-    if (activeSubTab === 'pending' && req.status !== 'pending_supervisor' && req.supervisorStatus !== 'pending' && req.supervisorStatus !== 'needs_info') {
+    if (activeSubTab === 'resubmitted') {
+      const isResub = (req.isResubmitted || (req.revisionsCount && req.revisionsCount > 0)) && (req.status === 'pending_supervisor' || req.supervisorStatus === 'pending' || req.supervisorStatus === 'needs_info');
+      if (!isResub) return false;
+    } else if (activeSubTab === 'pending' && req.status !== 'pending_supervisor' && req.supervisorStatus !== 'pending' && req.supervisorStatus !== 'needs_info') {
       return false;
     }
     if (activeSubTab === 'approved' && req.supervisorStatus !== 'approved' && req.status === 'pending_supervisor') {
@@ -189,6 +195,38 @@ export const ClubSupervisorView: React.FC<Props> = ({ onOpenRequestDetails }) =>
         </div>
       </div>
 
+      {/* 2. Resubmitted / Revised Requests Alert Banner */}
+      {resubmittedRequests.length > 0 && (
+        <div className="bg-gradient-to-r from-purple-900 via-indigo-950 to-purple-950 text-white p-5 sm:p-6 rounded-3xl border-2 border-purple-400/60 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 animate-in fade-in">
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-purple-500 text-white flex items-center justify-center font-bold text-xl shrink-0 shadow-inner border border-white/20 animate-pulse">
+              🔄
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black uppercase tracking-wider bg-purple-400/30 text-purple-200 px-2.5 py-0.5 rounded-full border border-purple-300/40">
+                  تحديث واستيفاء عاجل
+                </span>
+                <h4 className="text-sm sm:text-base font-bold text-white font-['Tajawal',sans-serif]">
+                  لديك {resubmittedRequests.length} طلب فعالية قام رئيس النادي بتعديلها وإعادة إرسالها حسب إفادتكم!
+                </h4>
+              </div>
+              <p className="text-xs text-purple-200 mt-1 leading-relaxed">
+                قام رئيس النادي بمراجعة ملاحظاتكم وتوجيهاتكم السابقة، وتعديل بيانات الفعالية والخدمات، مع إرفاق رد توضيحي. يمكنك اعتمادها مباشرة لإحالتها للموظفين.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setActiveSubTab('resubmitted')}
+            className="px-4 py-2.5 bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-400 hover:to-indigo-400 text-white text-xs font-bold rounded-xl shadow-md cursor-pointer shrink-0 self-end md:self-center transition-all hover:scale-105 flex items-center gap-2"
+          >
+            <RotateCw className="w-3.5 h-3.5" />
+            <span>عرض الفعاليات المعدلة ({resubmittedRequests.length})</span>
+          </button>
+        </div>
+      )}
+
       {/* 2. Approval Flow Notice Card */}
       <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-blue-50 p-4 sm:p-5 rounded-2xl border border-emerald-200/80 shadow-xs flex items-start gap-3.5">
         <div className="p-2 bg-emerald-600 text-white rounded-xl shadow-xs shrink-0 mt-0.5">
@@ -217,6 +255,20 @@ export const ClubSupervisorView: React.FC<Props> = ({ onOpenRequestDetails }) =>
             <Clock className="w-4 h-4" />
             <span>طلبات بانتظار الاعتماد ({pendingRequests.length})</span>
           </button>
+
+          {resubmittedRequests.length > 0 && (
+            <button
+              onClick={() => setActiveSubTab('resubmitted')}
+              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                activeSubTab === 'resubmitted'
+                  ? 'bg-purple-600 text-white shadow-md shadow-purple-700/20 ring-2 ring-purple-400/40'
+                  : 'bg-purple-50 text-purple-900 border border-purple-200 hover:bg-purple-100'
+              }`}
+            >
+              <RotateCw className="w-4 h-4" />
+              <span>معدلة بعد الإفادة ({resubmittedRequests.length})</span>
+            </button>
+          )}
 
           <button
             onClick={() => setActiveSubTab('approved')}
@@ -318,7 +370,12 @@ export const ClubSupervisorView: React.FC<Props> = ({ onOpenRequestDetails }) =>
                       </span>
 
                       {/* Supervisor Status Badge */}
-                      {isPending ? (
+                      {request.isResubmitted ? (
+                        <span className="px-3 py-0.5 rounded-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-xs font-bold flex items-center gap-1 shadow-xs animate-pulse">
+                          <RotateCw className="w-3.5 h-3.5" />
+                          تم تعديل الطلب واستيفاء إفادتكم 🔄
+                        </span>
+                      ) : isPending ? (
                         <span className="px-3 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold flex items-center gap-1 animate-pulse">
                           <Clock className="w-3.5 h-3.5 text-amber-600" />
                           بانتظار موافقتكم للاعتماد
@@ -470,8 +527,47 @@ export const ClubSupervisorView: React.FC<Props> = ({ onOpenRequestDetails }) =>
                     </div>
                   )}
 
-                  {/* Supervisor Note if already approved / reviewed */}
-                  {request.supervisorNotes && (
+                  {/* Resubmission & Revision Box */}
+                  {(request.isResubmitted || request.presidentReplyNotes) && (
+                    <div className="bg-gradient-to-r from-purple-50 via-indigo-50/60 to-purple-50/40 p-4 rounded-2xl border-2 border-purple-300 text-xs shadow-xs space-y-2.5">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-lg bg-purple-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                            💬
+                          </div>
+                          <strong className="text-purple-950 font-bold text-sm font-['Tajawal',sans-serif]">
+                            رد رئيس النادي وإيضاح التعديلات المستوفاة:
+                          </strong>
+                        </div>
+                        {request.lastResubmittedAt && (
+                          <span className="text-[11px] text-purple-800 bg-purple-100/90 border border-purple-300 px-2.5 py-0.5 rounded-full font-bold">
+                            تاريخ إعادة الإرسال: {new Date(request.lastResubmittedAt).toLocaleString('ar-SA', { dateStyle: 'short', timeStyle: 'short' })}
+                          </span>
+                        )}
+                      </div>
+
+                      {request.supervisorNotes && (
+                        <div className="bg-white/90 p-2.5 rounded-xl border border-purple-200 text-slate-700">
+                          <span className="text-[11px] text-slate-500 block font-bold mb-0.5">ملاحظاتكم وتوجيهاتكم السابقة:</span>
+                          <p className="text-slate-800 font-medium">{request.supervisorNotes}</p>
+                        </div>
+                      )}
+
+                      {request.presidentReplyNotes ? (
+                        <div className="bg-purple-100/80 p-3 rounded-xl border border-purple-300 text-purple-950">
+                          <span className="text-[11px] text-purple-900 block font-bold mb-1">بيان وإفادة رئيس النادي للتعديل:</span>
+                          <p className="text-purple-950 font-bold leading-relaxed">{request.presidentReplyNotes}</p>
+                        </div>
+                      ) : (
+                        <p className="text-purple-900 font-semibold italic bg-purple-100/50 p-2.5 rounded-xl border border-purple-200">
+                          قام رئيس النادي بتحديث وتعديل بيانات الفعالية والخدمات اللوجستية المطلوبة وفق توجيهاتكم السابقة.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Supervisor Note if already approved / reviewed without resubmission */}
+                  {request.supervisorNotes && !request.isResubmitted && !request.presidentReplyNotes && (
                     <div className="bg-indigo-50/60 p-3 rounded-xl border border-indigo-100 text-xs text-indigo-950 flex items-start gap-2">
                       <MessageSquare className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
                       <div>

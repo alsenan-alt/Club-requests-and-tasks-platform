@@ -25,29 +25,11 @@ function sanitizeDatabasePayload(payload: any) {
     'user_supervisor_omari',
   ]);
 
-  const legacyClubNames = new Set([
-    'نادي هندسة البرمجيات والذكاء الاصطناعي',
-    'نادي المناظرات والحوار الفكري',
-    'نادي الجوالة والمغامرات',
-    'نادي الهندسة الكهربائية والميكانيكية',
-    'نادي الفنون والإبداع',
-  ]);
-
   if (Array.isArray(payload.userAccounts)) {
     payload.userAccounts = payload.userAccounts.filter((u: any) => 
       !legacyAccountIds.has(u.id) &&
-      !legacyAccountIds.has(u.username) &&
-      !(u.clubName && legacyClubNames.has(u.clubName.trim()))
+      !legacyAccountIds.has(u.username)
     );
-  }
-
-  if (Array.isArray(payload.clubsList)) {
-    payload.clubsList = payload.clubsList.filter((c: string) => 
-      typeof c === 'string' && !legacyClubNames.has(c.trim())
-    );
-    if (payload.clubsList.length === 0) {
-      payload.clubsList = ['نادي وعينا'];
-    }
   }
 
   if (Array.isArray(payload.deletedAccountIds)) {

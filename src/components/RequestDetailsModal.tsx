@@ -256,6 +256,44 @@ export const RequestDetailsModal: React.FC<Props> = ({ requestId, onClose }) => 
                 </div>
               )}
 
+              {/* President's Resubmission Response Card */}
+              {(request.isResubmitted || request.presidentReplyNotes) && (
+                <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-purple-50 via-indigo-50/70 to-purple-50/50 border-2 border-purple-200 text-purple-950 shadow-xs">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center font-bold text-lg shrink-0 shadow-xs">
+                      💬
+                    </div>
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-bold text-purple-950 font-['Tajawal',sans-serif]">
+                            إفادة ورد رئيس النادي على التعديلات المستوفاة
+                          </h4>
+                          <span className="px-2.5 py-0.5 rounded-full bg-purple-200 text-purple-900 text-[10px] font-bold">
+                            طلب معدل 🔄
+                          </span>
+                        </div>
+                        {request.lastResubmittedAt && (
+                          <span className="text-[11px] text-purple-800 bg-purple-100 px-2.5 py-0.5 rounded-md font-semibold">
+                            تاريخ التعديل: {new Date(request.lastResubmittedAt).toLocaleString('ar-SA', { dateStyle: 'short', timeStyle: 'short' })}
+                          </span>
+                        )}
+                      </div>
+
+                      {request.presidentReplyNotes ? (
+                        <div className="p-3 rounded-xl bg-white border border-purple-200 text-xs font-bold leading-relaxed text-purple-950 shadow-xs">
+                          {request.presidentReplyNotes}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-purple-900 font-semibold italic bg-white/70 p-2.5 rounded-xl border border-purple-200">
+                          قام رئيس النادي بتحديث وتعديل بيانات الفعالية والمهام اللوجستية المطلوبة وفق توجيهات المشرف الأكاديمي.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Event Quick Summary Card */}
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">

@@ -557,14 +557,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             });
 
           const cloudIds = new Set(filteredCloudAccounts.map(u => u.id));
+          
+          // Also preserve locally created accounts that haven't been deleted
+          const localSaved = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
+          let localCustomAccounts: UserAccount[] = [];
+          if (localSaved) {
+            try {
+              const localParsed: UserAccount[] = JSON.parse(localSaved);
+              if (Array.isArray(localParsed)) {
+                localCustomAccounts = localParsed.filter(u => 
+                  !cloudIds.has(u.id) && 
+                  !deletedAccountSet.has(u.id) && 
+                  !deletedAccountSet.has(u.username) &&
+                  !(u.clubName && (
+                    deletedAccountSet.has(u.clubName) || 
+                    deletedAccountSet.has(normalizeClubName(u.clubName)) || 
+                    deletedAccountSet.has(`نادي ${normalizeClubName(u.clubName)}`)
+                  )) &&
+                  !legacyMockSupervisorIds.has(u.id)
+                );
+              }
+            } catch (e) {}
+          }
+
           // Only add default essential staff/admin accounts if missing, never resurrect deleted clubs/supervisors
           const missingDefaults = USER_ACCOUNTS.filter(u => 
             !cloudIds.has(u.id) && 
+            !localCustomAccounts.some(loc => loc.id === u.id) &&
             !deletedAccountSet.has(u.id) && 
             !deletedAccountSet.has(u.username) &&
             (u.role === 'admin' || u.role.startsWith('staff_'))
           );
-          const mergedAccounts = [...filteredCloudAccounts, ...missingDefaults];
+          const mergedAccounts = [...filteredCloudAccounts, ...localCustomAccounts, ...missingDefaults];
           setUserAccounts(mergedAccounts);
           localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(mergedAccounts));
           
@@ -1952,6 +1976,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       tasks: updatedTasks,
       supervisorStatus: newSupervisorStatus,
       status: newRequestStatus,
+      isResubmitted: true,
+      lastResubmittedAt: timestamp,
+      presidentReplyNotes: updatedData.presidentNotes?.trim() || currentReq.presidentReplyNotes,
+      revisionsCount: (currentReq.revisionsCount || 0) + 1,
       updatedAt: timestamp,
     };
 
