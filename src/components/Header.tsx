@@ -111,10 +111,15 @@ export const Header: React.FC<HeaderProps> = ({
 
   const roleInfo = getRoleDisplay();
 
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+
   const handleLogoutClick = () => {
-    if (window.confirm(isRtl ? 'هل ترغب في تسجيل الخروج وقفل الجلسة الحالية؟' : 'Do you want to log out and lock current session?')) {
-      logout();
-    }
+    setIsLogoutModalOpen(true);
+  };
+
+  const confirmLogout = () => {
+    setIsLogoutModalOpen(false);
+    logout();
   };
 
   return (
@@ -365,6 +370,45 @@ export const Header: React.FC<HeaderProps> = ({
 
         </div>
       </div>
+
+      {/* In-App Logout Confirmation Modal */}
+      {isLogoutModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150 font-['Cairo',sans-serif]">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-sm w-full p-6 text-center space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto border border-rose-200 shadow-xs">
+              <LogOut className="w-6 h-6" />
+            </div>
+
+            <div className="space-y-1.5">
+              <h3 className="text-base font-bold text-slate-900">
+                {isRtl ? 'تسجيل الخروج من المنظومة' : 'Sign Out of Platform'}
+              </h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                {isRtl 
+                  ? 'هل أنت متأكد من رغبتك في قفل الجلسة الحالية والعودة إلى بوابة الدخول الرئيسية؟' 
+                  : 'Are you sure you want to lock the current session and return to the login portal?'}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsLogoutModalOpen(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 font-bold text-xs transition-colors cursor-pointer"
+              >
+                {isRtl ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={confirmLogout}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition-colors cursor-pointer shadow-sm shadow-rose-200"
+              >
+                {isRtl ? 'تأكيد الخروج' : 'Confirm Logout'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 };

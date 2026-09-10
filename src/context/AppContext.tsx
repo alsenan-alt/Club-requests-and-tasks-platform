@@ -33,6 +33,19 @@ import {
   translateOptionValue, 
   translateUnit 
 } from '../i18n/translations';
+import {
+  subscribeToAllAppData,
+  seedInitialFirestoreDataIfEmpty,
+  saveRequestDoc,
+  deleteRequestDoc,
+  saveUserAccountDoc,
+  deleteUserAccountDoc,
+  saveServiceDoc,
+  deleteServiceDoc,
+  saveNotificationDoc,
+  deleteNotificationDoc,
+  bulkSyncStateToFirestore,
+} from '../api';
 
 interface AppContextType {
   language: Language;
@@ -688,6 +701,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Mark local timestamp
       localStorage.setItem(STORAGE_KEYS.LAST_MODIFIED, String(nowTimestamp));
 
+      // Instant Firestore real-time synchronization
+      bulkSyncStateToFirestore({
+        requests: payload.requests,
+        userAccounts: payload.userAccounts,
+        services: payload.services,
+        notifications: payload.notifications,
+      }).catch(err => console.warn('Firestore live push notice:', err));
+
       const pushRes = await pushGistDatabase(payload, currentUser?.name);
       if (pushRes.success) {
         const nowFormatted = new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -705,7 +726,96 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Initial mount: Pull cloud data from Server/Gist
+    // 1. Firebase Firestore Real-Time Live Sync & Initial Seeding
+  useEffect(() => {
+    // Seed initial data if Firestore is fresh/empty with full current state (including custom supervisors)
+    seedInitialFirestoreDataIfEmpty({
+      userAccounts: userAccounts.length > 0 ? userAccounts : USER_ACCOUNTS,
+      requests: requests.length > 0 ? requests : INITIAL_REQUESTS,
+      services: services.length > 0 ? services : AVAILABLE_SERVICES,
+      notifications: notifications.length > 0 ? notifications : INITIAL_NOTIFICATIONS,
+    }).then(() => {
+      // Ensure all custom accounts (supervisors, clubs) and data are actively persisted to Firestore
+      bulkSyncStateToFirestore({
+        userAccounts,
+        requests,
+        services,
+        notifications,
+      }).catch(err => console.warn('Firestore initial bulk sync notice:', err));
+    }).catch(err => console.warn('Firestore seed check notice:', err));
+
+    // Subscribe to real-time live updates across all devices
+    const unsubscribeFirestore = subscribeToAllAppData({
+      onRequestsChange: (incomingRequests) => {
+        if (incomingRequests && incomingRequests.length > 0) {
+          setRequests(incomingRequests);
+          localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(incomingRequests));
+          setCloudSyncStatus('synced');
+          setLastSyncTime(new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+        }
+      },
+      onUsersChange: (incomingUsers) => {
+        if (incomingUsers && incomingUsers.length > 0) {
+          const legacyMockSupervisorIds = new Set([
+            'user_supervisor_khalid',
+            'user_supervisor_fahad',
+            'user_supervisor_abdulaziz',
+            'user_supervisor_mohammed',
+            'user_supervisor_omari'
+          ]);
+          const filtered = incomingUsers.filter(u => !legacyMockSupervisorIds.has(u.id));
+          const existingIds = new Set(filtered.map(u => u.id));
+          
+          // Also preserve any custom accounts (like newly registered supervisors/clubs) from local state and save to Firestore
+          const localCustomAccounts = userAccounts.filter(u => u.isCustom && !existingIds.has(u.id));
+          localCustomAccounts.forEach(customAcc => {
+            saveUserAccountDoc(customAcc).catch(e => console.warn('Sync custom account to Firestore error:', e));
+          });
+
+          const missingDefaults = USER_ACCOUNTS.filter(u => !existingIds.has(u.id) && (u.role === 'admin' || u.role.startsWith('staff_')));
+          const merged = [...filtered, ...localCustomAccounts, ...missingDefaults];
+          
+          setUserAccounts(merged);
+          localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(merged));
+          setCloudSyncStatus('synced');
+          setLastSyncTime(new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+
+          // Update currentUser reference if updated
+          setCurrentUser(prevUser => {
+            if (!prevUser) return null;
+            const updatedProfile = merged.find(u => u.id === prevUser.id);
+            if (updatedProfile) {
+              localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(updatedProfile));
+              return updatedProfile;
+            }
+            return prevUser;
+          });
+        }
+      },
+      onServicesChange: (incomingServices) => {
+        if (incomingServices && incomingServices.length > 0) {
+          setServices(incomingServices);
+          localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(incomingServices));
+          setCloudSyncStatus('synced');
+        }
+      },
+      onNotificationsChange: (incomingNotifs) => {
+        if (incomingNotifs && incomingNotifs.length > 0) {
+          setNotifications(incomingNotifs);
+          localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(incomingNotifs));
+        }
+      },
+      onError: (err) => {
+        console.warn('Firestore live listener notice:', err);
+      }
+    });
+
+    return () => {
+      unsubscribeFirestore();
+    };
+  }, []);
+
+  // Initial mount: Pull cloud data from Server/Gist as backup
   useEffect(() => {
     pullFromCloudGist(false);
   }, []);
@@ -851,6 +961,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     markLocalDataModified();
     setCurrentUser(updatedAccount);
     localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(updatedAccount));
+
+    // Persist directly to Firestore
+    saveUserAccountDoc(updatedAccount).catch(e => console.warn('Firestore change password error:', e));
 
     setUserAccounts(prev => {
       const updated = prev.map(acc => acc.id === currentUser.id ? updatedAccount : acc);
@@ -1011,6 +1124,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setNotifications(prev => [...newNotifs, ...prev]);
     markLocalDataModified();
 
+    // Persist directly to Firestore
+    saveUserAccountDoc(newAccount).catch(e => console.warn('Firestore save club president error:', e));
+    if (newAccount.supervisorId) {
+      const sup = updatedAccounts.find(u => u.id === newAccount.supervisorId);
+      if (sup) saveUserAccountDoc(sup).catch(e => console.warn('Firestore save supervisor update error:', e));
+    }
+
     // Instant cloud synchronization push
     pushToCloudGist({
       userAccounts: updatedAccounts,
@@ -1120,6 +1240,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setNotifications(prev => [...newNotifs, ...prev]);
     markLocalDataModified();
 
+    // Persist directly to Firestore
+    saveUserAccountDoc(newAccount).catch(e => console.warn('Firestore save supervisor error:', e));
+
     // Instant cloud synchronization push
     pushToCloudGist({
       userAccounts: nextAccounts,
@@ -1195,6 +1318,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(freshUser));
         }
       }
+    }
+
+    // Delete from Firestore
+    deleteUserAccountDoc(supervisorId).catch(e => console.warn('Firestore delete user error:', e));
+    if (target.id !== supervisorId) {
+      deleteUserAccountDoc(target.id).catch(e => console.warn('Firestore delete user error:', e));
     }
 
     markLocalDataModified();
@@ -1317,6 +1446,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(freshUser));
         }
       }
+    }
+
+    // Delete from Firestore
+    deleteUserAccountDoc(clubUserId).catch(e => console.warn('Firestore delete user error:', e));
+    if (target.id !== clubUserId) {
+      deleteUserAccountDoc(target.id).catch(e => console.warn('Firestore delete user error:', e));
     }
 
     markLocalDataModified();
@@ -1840,6 +1975,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     markLocalDataModified();
 
+    // Persist directly to Firestore
+    saveRequestDoc(newRequest).catch(e => console.warn('Firestore save request error:', e));
+
     // Instant cloud synchronization push for club requests
     pushToCloudGist({
       requests: nextRequests,
@@ -2017,6 +2155,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(nextNotifications));
 
     markLocalDataModified();
+
+    // Persist directly to Firestore
+    saveRequestDoc(updatedRequest).catch(e => console.warn('Firestore save updated request error:', e));
 
     pushToCloudGist({
       requests: nextRequests,
@@ -2478,6 +2619,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setRequests(updatedRequests);
     localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(updatedRequests));
 
+    // Delete from Firestore
+    deleteRequestDoc(requestId).catch(e => console.warn('Firestore delete request error:', e));
+
     if (selectedRequestId === requestId) {
       setSelectedRequestId(null);
     }
@@ -2739,6 +2883,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     markLocalDataModified();
     localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(nextServices));
 
+    // Persist directly to Firestore
+    saveServiceDoc(newService).catch(e => console.warn('Firestore save service error:', e));
+
     setTimeout(() => {
       pushToCloudGist({
         version: 2,
@@ -2779,6 +2926,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       nextServices = prev.filter(s => s.id !== serviceId);
       return nextServices;
     });
+
+    deleteServiceDoc(serviceId).catch(e => console.warn('Firestore delete service error:', e));
 
     markLocalDataModified();
     localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(nextServices));

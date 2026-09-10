@@ -1,0 +1,61 @@
+{
+  "$schema": "https://firebase.google.com/schemas/firestore-blueprint.json",
+  "entities": {
+    "userAccounts": {
+      "title": "User Accounts",
+      "description": "Registered users including admins, club presidents, academic supervisors, and staff",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "username": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "clubName": { "type": "string" },
+        "supervisorId": { "type": "string" },
+        "supervisorName": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "password": { "type": "string" }
+      },
+      "required": ["id", "name", "role"]
+    },
+    "requests": {
+      "title": "Club Requests",
+      "description": "Activity and service requests created by student clubs",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "requestNumber": { "type": "string" },
+        "clubName": { "type": "string" },
+        "eventTitle": { "type": "string" },
+        "status": { "type": "string" },
+        "tasks": { "type": "array" }
+      },
+      "required": ["id", "requestNumber", "clubName", "eventTitle", "status"]
+    },
+    "services": {
+      "title": "Services Catalog",
+      "description": "Configurable university and deanship services",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "notifications": {
+      "title": "Notifications",
+      "description": "Live alerts and notifications for roles",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "targetRole": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "title", "message", "timestamp"]
+    }
+  }
+}
