@@ -554,25 +554,27 @@ export const StaffDashboardView: React.FC<Props> = ({ staff: propStaff, onOpenRe
                     {/* Status Indicator */}
                     <div className="text-right">
                       <span className="text-[10px] text-slate-400 block mb-1">الحالة الحالية:</span>
-                      {task.status === 'completed' && (
+                      {request.supervisorStatus !== 'approved' ? (
+                        <span className="px-3 py-1 text-xs font-bold text-amber-800 bg-amber-100 border border-amber-300 rounded-xl inline-flex items-center gap-1.5 animate-pulse">
+                          <Clock3 className="w-4 h-4 text-amber-600" />
+                          <span>بانتظار موافقة المشرف ({request.supervisorName || 'المشرف'})</span>
+                        </span>
+                      ) : task.status === 'completed' ? (
                         <span className="px-3 py-1 text-xs font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 rounded-xl inline-flex items-center gap-1.5">
                           <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                           <span>تم الإنجاز بنجاح</span>
                         </span>
-                      )}
-                      {task.status === 'in_progress' && (
+                      ) : task.status === 'in_progress' ? (
                         <span className="px-3 py-1 text-xs font-bold text-blue-800 bg-blue-100 border border-blue-300 rounded-xl inline-flex items-center gap-1.5">
                           <Clock3 className="w-4 h-4 text-blue-600 animate-spin" />
                           <span>جارٍ التجهيز والعمل</span>
                         </span>
-                      )}
-                      {task.status === 'pending' && (
+                      ) : task.status === 'pending' ? (
                         <span className="px-3 py-1 text-xs font-bold text-amber-800 bg-amber-100 border border-amber-300 rounded-xl inline-flex items-center gap-1.5">
                           <AlertCircle className="w-4 h-4 text-amber-600" />
-                          <span>جديدة بانتظار الإجراء</span>
+                          <span>معتمدة بانتظار البدء</span>
                         </span>
-                      )}
-                      {task.status === 'rejected' && (
+                      ) : (
                         <span className="px-3 py-1 text-xs font-bold text-rose-800 bg-rose-100 border border-rose-300 rounded-xl inline-flex items-center gap-1.5">
                           <XCircle className="w-4 h-4 text-rose-600" />
                           <span>اعتذار</span>
@@ -583,24 +585,33 @@ export const StaffDashboardView: React.FC<Props> = ({ staff: propStaff, onOpenRe
                     {/* Action Buttons */}
                     <div className="flex flex-wrap items-center gap-2">
                       
-                      {task.status !== 'in_progress' && task.status !== 'completed' && (
-                        <button
-                          onClick={() => updateTaskStatus(task.id, 'in_progress', 'تم قبول المهمة وبدء التجهيز')}
-                          className="px-3.5 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <Clock3 className="w-3.5 h-3.5" />
-                          <span>بدء التجهيز</span>
-                        </button>
-                      )}
+                      {request.supervisorStatus !== 'approved' ? (
+                        <div className="px-3 py-1 text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl inline-flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                          <span>يتطلب اعتماد المشرف للبدء</span>
+                        </div>
+                      ) : (
+                        <>
+                          {task.status !== 'in_progress' && task.status !== 'completed' && (
+                            <button
+                              onClick={() => updateTaskStatus(task.id, 'in_progress', 'تم قبول المهمة وبدء التجهيز')}
+                              className="px-3.5 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <Clock3 className="w-3.5 h-3.5" />
+                              <span>بدء التجهيز</span>
+                            </button>
+                          )}
 
-                      {task.status !== 'completed' && (
-                        <button
-                          onClick={() => updateTaskStatus(task.id, 'completed', 'تم استكمال وتجهيز كافة المتطلبات بنجاح')}
-                          className="px-3.5 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>اعتماد الإنجاز</span>
-                        </button>
+                          {task.status !== 'completed' && (
+                            <button
+                              onClick={() => updateTaskStatus(task.id, 'completed', 'تم استكمال وتجهيز كافة المتطلبات بنجاح')}
+                              className="px-3.5 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>اعتماد الإنجاز</span>
+                            </button>
+                          )}
+                        </>
                       )}
 
                       <button

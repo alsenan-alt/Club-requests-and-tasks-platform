@@ -64,6 +64,7 @@ interface AppContextType {
   login: (userId: string) => void;
   validateAndLogin: (userIdOrUsername: string, passwordInput: string) => { success: boolean; message?: string };
   changePassword: (oldPassword: string, newPassword: string) => { success: boolean; message: string };
+  adminResetUserPassword: (targetUserId: string, newPassword: string) => { success: boolean; message: string };
   logout: () => void;
   registerNewClubPresident: (formData: {
     clubName: string;
@@ -944,7 +945,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { success: false, message: 'لا يوجد مستخدم مسجل حالياً' };
     }
 
-    const currentActualPassword = (currentUser.password || '123').trim();
+    const freshAccount = userAccounts.find(u => u.id === currentUser.id) || currentUser;
+    const currentActualPassword = (freshAccount.password || currentUser.password || '123').trim();
     if (oldPassword.trim() !== currentActualPassword) {
       return { success: false, message: 'كلمة المرور الحالية غير صحيحة' };
     }
@@ -954,7 +956,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const updatedAccount: UserAccount = {
-      ...currentUser,
+      ...freshAccount,
       password: newPassword.trim(),
     };
 
@@ -962,19 +964,59 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentUser(updatedAccount);
     localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(updatedAccount));
 
+    const updatedAccounts = userAccounts.map(acc => acc.id === currentUser.id ? updatedAccount : acc);
+    setUserAccounts(updatedAccounts);
+    localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(updatedAccounts));
+
     // Persist directly to Firestore
     saveUserAccountDoc(updatedAccount).catch(e => console.warn('Firestore change password error:', e));
 
-    setUserAccounts(prev => {
-      const updated = prev.map(acc => acc.id === currentUser.id ? updatedAccount : acc);
-      localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(updated));
-      return updated;
+    // Immediate background push to Cloud with fresh updated accounts
+    pushToCloudGist({
+      userAccounts: updatedAccounts,
     });
 
-    // Immediate background push to Cloud
-    pushToCloudGist();
+    return { success: true, message: 'تم تحديث وحفظ كلمة المرور الجديدة بنجاح في السحابة!' };
+  };
 
-    return { success: true, message: 'تم تحديث وحفظ كلمة المرور الجديدة بنجاح!' };
+  const adminResetUserPassword = (targetUserId: string, newPassword: string): { success: boolean; message: string } => {
+    if (!currentUser || currentUser.role !== 'admin') {
+      return { success: false, message: 'هذه العملية تتطلب صلاحيات إدارة النشاط الطلابي' };
+    }
+    if (!newPassword || newPassword.trim().length < 3) {
+      return { success: false, message: 'يجب أن تتكون كلمة المرور من 3 خانات على الأقل' };
+    }
+
+    const target = userAccounts.find(u => u.id === targetUserId);
+    if (!target) {
+      return { success: false, message: 'لم يتم العثور على الحساب المحدد' };
+    }
+
+    const updatedAccount: UserAccount = {
+      ...target,
+      password: newPassword.trim(),
+    };
+
+    const nextAccounts = userAccounts.map(u => u.id === targetUserId ? updatedAccount : u);
+    setUserAccounts(nextAccounts);
+    localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(nextAccounts));
+
+    if (currentUser.id === targetUserId) {
+      setCurrentUser(updatedAccount);
+      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(updatedAccount));
+    }
+
+    markLocalDataModified();
+
+    // Persist directly to Firestore
+    saveUserAccountDoc(updatedAccount).catch(e => console.warn('Firestore admin reset password error:', e));
+
+    // Push to Cloud
+    pushToCloudGist({
+      userAccounts: nextAccounts,
+    });
+
+    return { success: true, message: `تم تحديث وحفظ كلمة المرور الجديدة لحساب (${target.name}) بنجاح!` };
   };
 
   const logout = () => {
@@ -1494,9 +1536,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     markLocalDataModified();
 
     let targetAccount: UserAccount | undefined;
+    let updatedList: UserAccount[] = [];
 
     setUserAccounts(prev => {
-      const updatedList = prev.map(acc => {
+      updatedList = prev.map(acc => {
         if (acc.id === userIdToUpdate) {
           const updated = { ...acc, ...updatedFields };
           targetAccount = updated;
@@ -1512,19 +1555,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return updatedList;
     });
 
+    if (targetAccount) {
+      saveUserAccountDoc(targetAccount).catch(e => console.warn('Firestore save user profile error:', e));
+    }
+
     // If club president or account with clubName was updated, sync all existing requests for that club
     const clubNameToMatch = targetAccount?.clubName || (currentUser?.id === userIdToUpdate ? currentUser?.clubName : undefined);
     if (clubNameToMatch) {
       setRequests(prev => {
         const updatedReqs = prev.map(r => {
           if (r.clubName === clubNameToMatch) {
-            return {
+            const updated = {
               ...r,
               clubName: updatedFields.clubName || r.clubName,
               presidentName: updatedFields.name !== undefined ? updatedFields.name : r.presidentName,
               presidentPhone: updatedFields.phone !== undefined ? updatedFields.phone : r.presidentPhone,
               presidentEmail: updatedFields.email !== undefined ? updatedFields.email : r.presidentEmail,
             };
+            saveRequestDoc(updated).catch(e => console.warn('Firestore sync req error:', e));
+            return updated;
           }
           return r;
         });
@@ -1533,8 +1582,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     }
 
-    // Immediate background push to cloud
-    pushToCloudGist();
+    // Immediate background push to cloud with fresh updated accounts
+    pushToCloudGist({
+      userAccounts: updatedList.length > 0 ? updatedList : userAccounts,
+    });
   };
 
   const currentRole: RoleType = currentUser?.role || 'club_president';
@@ -1665,22 +1716,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const approveRequestBySupervisor = (requestId: string, supervisorNotes?: string) => {
     const timestamp = new Date().toISOString();
     let targetReq: ClubRequest | undefined;
+    let nextRequests: ClubRequest[] = [];
 
-    setRequests(prev => prev.map(req => {
-      if (req.id !== requestId) return req;
-      const updated: ClubRequest = {
-        ...req,
-        status: 'submitted',
-        supervisorStatus: 'approved',
-        supervisorApprovalDate: timestamp,
-        supervisorNotes: supervisorNotes || req.supervisorNotes || 'تمت الموافقة والاعتماد من مشرف النادي.',
-        updatedAt: timestamp,
-      };
-      targetReq = updated;
-      return updated;
-    }));
+    setRequests(prev => {
+      nextRequests = prev.map(req => {
+        if (req.id !== requestId) return req;
+        const updated: ClubRequest = {
+          ...req,
+          status: 'submitted',
+          supervisorStatus: 'approved',
+          supervisorApprovalDate: timestamp,
+          supervisorNotes: supervisorNotes || req.supervisorNotes || 'تمت الموافقة والاعتماد من مشرف النادي.',
+          updatedAt: timestamp,
+        };
+        targetReq = updated;
+        return updated;
+      });
+      return nextRequests;
+    });
+
+    localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(nextRequests));
 
     if (targetReq) {
+      saveRequestDoc(targetReq).catch(e => console.warn('Firestore save approve request error:', e));
+
       const newNotifs: NotificationItem[] = [];
       const staffIdsTargeted = Array.from(new Set(targetReq.tasks.map(t => t.staffId)));
 
@@ -1689,21 +1748,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const staff = staffMembers.find(s => s.id === staffId) || STAFF_MEMBERS.find(s => s.id === staffId);
         if (staff) {
           const staffTasks = targetReq!.tasks.filter(t => t.staffId === staffId);
-          newNotifs.push({
+          const notif: NotificationItem = {
             id: `notif-${Date.now()}-${staffId}`,
             title: `مهام معتمدة جديدة من ${targetReq!.clubName}`,
-            message: `اعتمد المشرف فعالية (${targetReq!.eventTitle}) وتم توجيه ${staffTasks.length} مهام لاختصاصك.`,
+            message: `اعتمد المشرف فعالية (${targetReq!.eventTitle}) وتم توجيه ${staffTasks.length} مهام لاختصاصك للبدء في تجهيزها.`,
             targetRole: staff.roleCode,
             requestId: targetReq!.id,
             timestamp,
             read: false,
             type: 'new_request',
-          });
+          };
+          newNotifs.push(notif);
+          saveNotificationDoc(notif).catch(e => console.warn('Firestore save notif error:', e));
         }
       });
 
       // Notify Club President
-      newNotifs.push({
+      const presNotif: NotificationItem = {
         id: `notif-${Date.now()}-club-approved`,
         title: `تم اعتماد فعاليتك من المشرف! 🎉`,
         message: `اعتمد مشرف النادي طلب (${targetReq.eventTitle}) وأحيلت المهام مباشرة للموظفين المختصين للتنفيذ.`,
@@ -1712,10 +1773,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         timestamp,
         read: false,
         type: 'status_change',
-      });
+      };
+      newNotifs.push(presNotif);
+      saveNotificationDoc(presNotif).catch(e => console.warn('Firestore save notif error:', e));
 
       // Notify Admin
-      newNotifs.push({
+      const adminNotif: NotificationItem = {
         id: `notif-${Date.now()}-admin-approved`,
         title: `اعتماد مشرف: ${targetReq.clubName}`,
         message: `تم اعتماد طلب (${targetReq.eventTitle}) من قبل المشرف وإحالته لإجراءات التنفيذ.`,
@@ -1724,15 +1787,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         timestamp,
         read: false,
         type: 'status_change',
-      });
+      };
+      newNotifs.push(adminNotif);
+      saveNotificationDoc(adminNotif).catch(e => console.warn('Firestore save notif error:', e));
 
-      setNotifications(prev => [...newNotifs, ...prev]);
+      const nextNotifications = [...newNotifs, ...notifications];
+      setNotifications(nextNotifications);
+      localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(nextNotifications));
 
       markLocalDataModified();
       // Immediate instant push to Cloud and Server without delay
       pushToCloudGist({
-        requests: [targetReq, ...requests.filter(r => r.id !== requestId)],
-        notifications: [...newNotifs, ...notifications],
+        requests: nextRequests,
+        notifications: nextNotifications,
       });
 
       try {
@@ -1749,38 +1816,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const rejectRequestBySupervisor = (requestId: string, reason: string) => {
     const timestamp = new Date().toISOString();
     let targetReq: ClubRequest | undefined;
+    let nextRequests: ClubRequest[] = [];
 
-    setRequests(prev => prev.map(req => {
-      if (req.id !== requestId) return req;
-      const updated: ClubRequest = {
-        ...req,
-        status: 'rejected',
-        supervisorStatus: 'rejected',
-        supervisorNotes: reason,
-        updatedAt: timestamp,
-      };
-      targetReq = updated;
-      return updated;
-    }));
+    setRequests(prev => {
+      nextRequests = prev.map(req => {
+        if (req.id !== requestId) return req;
+        const updated: ClubRequest = {
+          ...req,
+          status: 'rejected',
+          supervisorStatus: 'rejected',
+          supervisorNotes: reason,
+          updatedAt: timestamp,
+        };
+        targetReq = updated;
+        return updated;
+      });
+      return nextRequests;
+    });
+
+    localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(nextRequests));
 
     if (targetReq) {
-      const newNotifs: NotificationItem[] = [
-        {
-          id: `notif-${Date.now()}-club-rej`,
-          title: `اعتذار مشرف النادي عن الفعالية`,
-          message: `اعتذر المشرف عن اعتماد (${targetReq?.eventTitle}): "${reason}"`,
-          targetRole: 'club_president',
-          requestId,
-          timestamp,
-          read: false,
-          type: 'alert',
-        },
-      ];
-      setNotifications(prev => [...newNotifs, ...prev]);
+      saveRequestDoc(targetReq).catch(e => console.warn('Firestore save reject request error:', e));
+
+      const newNotif: NotificationItem = {
+        id: `notif-${Date.now()}-club-rej`,
+        title: `اعتذار مشرف النادي عن الفعالية`,
+        message: `اعتذر المشرف عن اعتماد (${targetReq?.eventTitle}): "${reason}"`,
+        targetRole: 'club_president',
+        requestId,
+        timestamp,
+        read: false,
+        type: 'alert',
+      };
+      saveNotificationDoc(newNotif).catch(e => console.warn('Firestore save notif error:', e));
+
+      const nextNotifications = [newNotif, ...notifications];
+      setNotifications(nextNotifications);
+      localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(nextNotifications));
+
       markLocalDataModified();
       pushToCloudGist({
-        requests: [targetReq, ...requests.filter(r => r.id !== requestId)],
-        notifications: [...newNotifs, ...notifications],
+        requests: nextRequests,
+        notifications: nextNotifications,
       });
     }
   };
@@ -1788,37 +1866,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const requestChangesBySupervisor = (requestId: string, notes: string) => {
     const timestamp = new Date().toISOString();
     let targetReq: ClubRequest | undefined;
+    let nextRequests: ClubRequest[] = [];
 
-    setRequests(prev => prev.map(req => {
-      if (req.id !== requestId) return req;
-      const updated: ClubRequest = {
-        ...req,
-        supervisorStatus: 'needs_info',
-        supervisorNotes: notes,
-        updatedAt: timestamp,
-      };
-      targetReq = updated;
-      return updated;
-    }));
+    setRequests(prev => {
+      nextRequests = prev.map(req => {
+        if (req.id !== requestId) return req;
+        const updated: ClubRequest = {
+          ...req,
+          supervisorStatus: 'needs_info',
+          supervisorNotes: notes,
+          updatedAt: timestamp,
+        };
+        targetReq = updated;
+        return updated;
+      });
+      return nextRequests;
+    });
+
+    localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(nextRequests));
 
     if (targetReq) {
-      const newNotifs: NotificationItem[] = [
-        {
-          id: `notif-${Date.now()}-club-info`,
-          title: `ملاحظات وتعديلات من مشرف النادي`,
-          message: `طلب المشرف تعديلات بخصوص (${targetReq?.eventTitle}): "${notes}"`,
-          targetRole: 'club_president',
-          requestId,
-          timestamp,
-          read: false,
-          type: 'alert',
-        },
-      ];
-      setNotifications(prev => [...newNotifs, ...prev]);
+      saveRequestDoc(targetReq).catch(e => console.warn('Firestore save request changes error:', e));
+
+      const newNotif: NotificationItem = {
+        id: `notif-${Date.now()}-club-info`,
+        title: `ملاحظات وتعديلات من مشرف النادي`,
+        message: `طلب المشرف تعديلات بخصوص (${targetReq?.eventTitle}): "${notes}"`,
+        targetRole: 'club_president',
+        requestId,
+        timestamp,
+        read: false,
+        type: 'alert',
+      };
+      saveNotificationDoc(newNotif).catch(e => console.warn('Firestore save notif error:', e));
+
+      const nextNotifications = [newNotif, ...notifications];
+      setNotifications(nextNotifications);
+      localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(nextNotifications));
+
       markLocalDataModified();
       pushToCloudGist({
-        requests: [targetReq, ...requests.filter(r => r.id !== requestId)],
-        notifications: [...newNotifs, ...notifications],
+        requests: nextRequests,
+        notifications: nextNotifications,
       });
     }
   };
@@ -2185,9 +2274,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     newStatus: TaskStatus, 
     notes?: string, 
     commentText?: string
-  ) => {
+  ): { success: boolean; message?: string } => {
+    // 1. Check parent request
+    const currentReq = requests.find(r => r.tasks.some(t => t.id === taskId));
+    if (!currentReq) {
+      return { success: false, message: 'لم يتم العثور على الطلب المرتبط بالمهمة' };
+    }
+
+    // 2. Strict Workflow Enforcement: If the request is not approved by supervisor, staff cannot modify status!
+    if (currentReq.supervisorStatus !== 'approved' && currentRole !== 'admin') {
+      const msg = `عفواً، لا يمكن اتخاذ أي إجراء أو تغيير حالة المهمة لأن الطلب ما زال بانتظار اعتماد وموافقة المشرف الأكاديمي (${currentReq.supervisorName || 'المشرف الأكاديمي'}).`;
+      alert(msg);
+      return { success: false, message: msg };
+    }
+
     const timestamp = new Date().toISOString();
     let updatedAllRequests: ClubRequest[] = [];
+    let targetSavedRequest: ClubRequest | undefined;
 
     setRequests(prev => {
       updatedAllRequests = prev.map(req => {
@@ -2220,12 +2323,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         const newReqStatus = calculateRequestStatus(updatedTasks);
 
-        return {
+        const updated: ClubRequest = {
           ...req,
           status: newReqStatus,
           tasks: updatedTasks,
           updatedAt: timestamp,
         };
+        targetSavedRequest = updated;
+        return updated;
       });
       return updatedAllRequests;
     });
@@ -2233,8 +2338,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(updatedAllRequests));
     markLocalDataModified();
 
+    if (targetSavedRequest) {
+      saveRequestDoc(targetSavedRequest).catch(e => console.warn('Firestore save task update error:', e));
+    }
+
     // Notify club president of task update
-    const currentReq = requests.find(r => r.tasks.some(t => t.id === taskId));
     const targetTask = currentReq?.tasks.find(t => t.id === taskId);
 
     let updatedNotifs = notifications;
@@ -2262,6 +2370,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updatedNotifs = [newNotifItem, ...notifications];
       setNotifications(updatedNotifs);
       localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(updatedNotifs));
+      saveNotificationDoc(newNotifItem).catch(e => console.warn('Firestore save notif error:', e));
     }
 
     // Instant cloud synchronization push
@@ -2269,6 +2378,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       requests: updatedAllRequests.length > 0 ? updatedAllRequests : requests,
       notifications: updatedNotifs,
     });
+
+    return { success: true };
   };
 
   const addTaskComment = (taskId: string, message: string) => {
@@ -3023,6 +3134,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         login,
         validateAndLogin,
         changePassword,
+        adminResetUserPassword,
         logout,
         registerNewClubPresident,
         registerNewSupervisor,

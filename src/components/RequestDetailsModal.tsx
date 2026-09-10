@@ -402,21 +402,30 @@ export const RequestDetailsModal: React.FC<Props> = ({ requestId, onClose }) => 
                         <div className="flex items-center justify-between pt-2 border-t border-slate-100 flex-wrap gap-2">
                           {(isAssignee || currentRole === 'admin') && task.status !== 'completed' ? (
                             <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold text-slate-600">إجراءات الموظف:</span>
-                              {task.status === 'pending' && (
-                                <button
-                                  onClick={() => updateTaskStatus(task.id, 'in_progress', 'تم بدء العمل على التجهيزات')}
-                                  className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg cursor-pointer"
-                                >
-                                  بدء التجهيز
-                                </button>
+                              {request.supervisorStatus !== 'approved' && currentRole !== 'admin' ? (
+                                <div className="px-3 py-1 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg text-xs font-bold flex items-center gap-1.5">
+                                  <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                                  <span>بانتظار موافقة المشرف الأكاديمي أولاً للبدء بالتنفيذ</span>
+                                </div>
+                              ) : (
+                                <>
+                                  <span className="text-xs font-bold text-slate-600">إجراءات الموظف:</span>
+                                  {task.status === 'pending' && (
+                                    <button
+                                      onClick={() => updateTaskStatus(task.id, 'in_progress', 'تم بدء العمل على التجهيزات')}
+                                      className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg cursor-pointer"
+                                    >
+                                      بدء التجهيز
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => updateTaskStatus(task.id, 'completed', 'تم إنجاز وتأكيد الخدمة بالكامل')}
+                                    className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg cursor-pointer"
+                                  >
+                                    اعتماد الإنجاز
+                                  </button>
+                                </>
                               )}
-                              <button
-                                onClick={() => updateTaskStatus(task.id, 'completed', 'تم إنجاز وتأكيد الخدمة بالكامل')}
-                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg cursor-pointer"
-                              >
-                                اعتماد الإنجاز
-                              </button>
                             </div>
                           ) : <div />}
 

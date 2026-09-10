@@ -37,6 +37,7 @@ export const UserProfileModal: React.FC = () => {
     userAccounts, 
     updateUserProfile, 
     changePassword,
+    adminResetUserPassword,
     registerNewClubPresident, 
     deleteClubAccount,
     registerNewSupervisor,
@@ -52,6 +53,11 @@ export const UserProfileModal: React.FC = () => {
   const [saveAlertMessage, setSaveAlertMessage] = useState('تم حفظ وتحديث البيانات بنجاح في المنظومة.');
   const [isAddingNewClub, setIsAddingNewClub] = useState(false);
   const [clubToDelete, setClubToDelete] = useState<UserAccount | null>(null);
+
+  // Admin Reset User Password State
+  const [resetTargetUser, setResetTargetUser] = useState<UserAccount | null>(null);
+  const [adminResetNewPassword, setAdminResetNewPassword] = useState('');
+  const [adminResetError, setAdminResetError] = useState('');
 
   // Supervisor management state for Admin
   const [isAddingNewSupervisor, setIsAddingNewSupervisor] = useState(false);
@@ -1203,6 +1209,20 @@ export const UserProfileModal: React.FC = () => {
 
                         <button
                           type="button"
+                          onClick={() => {
+                            setResetTargetUser(clubUser);
+                            setAdminResetNewPassword('');
+                            setAdminResetError('');
+                          }}
+                          className="px-2.5 py-1 text-xs font-bold text-amber-700 hover:text-white hover:bg-amber-600 border border-amber-300 hover:border-amber-600 rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                          title={`تغيير كلمة مرور نادي ${clubUser.clubName}`}
+                        >
+                          <KeyRound className="w-3.5 h-3.5" />
+                          <span>كلمة المرور</span>
+                        </button>
+
+                        <button
+                          type="button"
                           onClick={() => setClubToDelete(clubUser)}
                           className="px-2.5 py-1 text-xs font-bold text-rose-600 hover:text-white hover:bg-rose-600 border border-rose-200 hover:border-rose-600 rounded-lg transition-all flex items-center gap-1 cursor-pointer"
                           title={`حذف نادي ${clubUser.clubName}`}
@@ -1434,6 +1454,20 @@ export const UserProfileModal: React.FC = () => {
 
                         <button
                           type="button"
+                          onClick={() => {
+                            setResetTargetUser(supUser);
+                            setAdminResetNewPassword('');
+                            setAdminResetError('');
+                          }}
+                          className="px-2.5 py-1 text-xs font-bold text-amber-700 hover:text-white hover:bg-amber-600 border border-amber-300 hover:border-amber-600 rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                          title={`تغيير كلمة مرور المشرف ${supUser.name}`}
+                        >
+                          <KeyRound className="w-3.5 h-3.5" />
+                          <span>كلمة المرور</span>
+                        </button>
+
+                        <button
+                          type="button"
                           onClick={() => setSupervisorToDelete(supUser)}
                           className="px-2.5 py-1 text-xs font-bold text-rose-600 hover:text-white hover:bg-rose-600 border border-rose-200 hover:border-rose-600 rounded-lg transition-all flex items-center gap-1 cursor-pointer"
                           title={`حذف المشرف ${supUser.name}`}
@@ -1528,6 +1562,87 @@ export const UserProfileModal: React.FC = () => {
           )}
 
         </div>
+
+        {/* Reset Password Modal Dialog for Admin */}
+        {resetTargetUser && (
+          <div className="fixed inset-0 z-70 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-white rounded-2xl p-5 max-w-md w-full border border-amber-200 shadow-2xl space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mx-auto">
+                <KeyRound className="w-6 h-6" />
+              </div>
+
+              <div className="text-center">
+                <h4 className="text-sm font-bold text-slate-900">تعيين كلمة مرور جديدة للحساب</h4>
+                <p className="text-xs text-slate-600 mt-1">
+                  الحساب: <strong className="text-slate-900">{resetTargetUser.name}</strong> ({resetTargetUser.clubName || resetTargetUser.title || resetTargetUser.role})
+                </p>
+                <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                  اسم المستخدم: {resetTargetUser.username}
+                </p>
+              </div>
+
+              {adminResetError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-bold text-rose-700 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{adminResetError}</span>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-700 block">
+                  كلمة المرور الجديدة المباشرة:
+                </label>
+                <input
+                  type="text"
+                  value={adminResetNewPassword}
+                  onChange={e => setAdminResetNewPassword(e.target.value)}
+                  placeholder="أدخل كلمة المرور الجديدة (مثال: 123456)..."
+                  className="w-full text-sm p-3 rounded-xl bg-slate-50 border border-slate-300 font-mono focus:bg-white focus:ring-2 focus:ring-amber-500"
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResetTargetUser(null);
+                    setAdminResetNewPassword('');
+                    setAdminResetError('');
+                  }}
+                  className="px-4 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+                >
+                  إلغاء
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!adminResetNewPassword.trim() || adminResetNewPassword.trim().length < 3) {
+                      setAdminResetError('يجب ألا تقل كلمة المرور عن 3 خانات');
+                      return;
+                    }
+                    const res = adminResetUserPassword(resetTargetUser.id, adminResetNewPassword.trim());
+                    if (!res.success) {
+                      setAdminResetError(res.message);
+                    } else {
+                      setResetTargetUser(null);
+                      setAdminResetNewPassword('');
+                      setAdminResetError('');
+                      setSaveAlertMessage(res.message);
+                      setShowSaveAlert(true);
+                      setTimeout(() => setShowSaveAlert(false), 3500);
+                    }
+                  }}
+                  className="px-5 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl transition-all shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>حفظ وتعيين كلمة المرور سحابياً</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>
