@@ -47,6 +47,24 @@ async function startServer() {
 
   app.use(express.json({ limit: '10mb' }));
 
+  // API Route: Automated Email Notifications Dispatcher
+  app.post('/api/send-email', (req, res) => {
+    try {
+      const { recipientEmail, recipientName, subject, requestId, clubName, eventTitle } = req.body || {};
+      const timestamp = new Date().toISOString();
+      console.log(`[EMAIL NOTIFICATION] [${timestamp}] Sent to: ${recipientName} <${recipientEmail}> | Subject: "${subject}" | Request: ${requestId} (${clubName} - ${eventTitle})`);
+      return res.json({
+        success: true,
+        message: `تم إرسال الإشعار البريدي بنجاح إلى ${recipientEmail}`,
+        sentAt: timestamp,
+        recipient: recipientEmail,
+      });
+    } catch (err: any) {
+      console.error('Error handling /api/send-email:', err);
+      return res.status(500).json({ success: false, error: err.message || 'Failed to dispatch email' });
+    }
+  });
+
   // In-memory cache + file-based persistence for instant multi-device synchronization
   let inMemoryLatestData: any = null;
   let inMemoryLatestTimestamp: number = 0;

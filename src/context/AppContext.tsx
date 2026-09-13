@@ -251,6 +251,7 @@ export const normalizeClubName = (name?: string): string => {
     .replace(/^نادي\s+/, '')
     .replace(/[أإآ]/g, 'ا')
     .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
     .replace(/\s+/g, ' ')
     .toLowerCase();
 };
@@ -261,6 +262,96 @@ export const isSameClubName = (name1?: string, name2?: string): boolean => {
   const n2 = name2.trim();
   if (n1 === n2) return true;
   return normalizeClubName(n1) === normalizeClubName(n2);
+};
+
+// Robust helper functions for supervisor normalization & dynamic resolution
+export const normalizePersonName = (name?: string): string => {
+  if (!name) return '';
+  return name
+    .trim()
+    .replace(/^(د\.|أ\.د\.|دكتور|دكتورة|استاذ|أستاذ|أستاذة|أ\.|م\.|مهندس|المهندس|الاستاذ|الأستاذ|الدكتور)\s*/gi, '')
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+};
+
+export const isSameSupervisor = (
+  u: UserAccount, 
+  targetId?: string, 
+  targetName?: string, 
+  targetClub?: string
+): boolean => {
+  if (u.role !== 'club_supervisor') return false;
+  if (targetId && (u.id === targetId || u.username === targetId)) return true;
+  
+  if (targetName && u.name) {
+    const normU = normalizePersonName(u.name);
+    const normTarget = normalizePersonName(targetName);
+    if (normU === normTarget || normU.includes(normTarget) || normTarget.includes(normU)) return true;
+  }
+  
+  if (targetClub && u.supervisedClubNames && u.supervisedClubNames.length > 0) {
+    if (u.supervisedClubNames.some(c => isSameClubName(c, targetClub))) return true;
+  }
+  
+  return false;
+};
+
+export const findSupervisorForClub = (
+  clubName: string,
+  supervisorId?: string,
+  supervisorName?: string,
+  userAccounts: UserAccount[] = []
+): UserAccount | undefined => {
+  const supervisors = userAccounts.filter(u => u.role === 'club_supervisor');
+  if (supervisors.length === 0) return undefined;
+
+  // 1. Direct ID match
+  if (supervisorId) {
+    const matched = supervisors.find(u => u.id === supervisorId || u.username === supervisorId);
+    if (matched) return matched;
+  }
+
+  // 2. Name match (fuzzy normalized)
+  if (supervisorName) {
+    const normTarget = normalizePersonName(supervisorName);
+    const matched = supervisors.find(u => {
+      const normU = normalizePersonName(u.name);
+      return normU === normTarget || normU.includes(normTarget) || normTarget.includes(normU);
+    });
+    if (matched) return matched;
+  }
+
+  // 3. Supervised clubs list match
+  if (clubName) {
+    const matched = supervisors.find(u => 
+      u.supervisedClubNames && u.supervisedClubNames.some(c => isSameClubName(c, clubName))
+    );
+    if (matched) return matched;
+  }
+
+  // 4. Match through club president account registration
+  if (clubName) {
+    const clubPresidentAcc = userAccounts.find(u => u.role === 'club_president' && isSameClubName(u.clubName, clubName));
+    if (clubPresidentAcc) {
+      if (clubPresidentAcc.supervisorId) {
+        const matched = supervisors.find(u => u.id === clubPresidentAcc.supervisorId || u.username === clubPresidentAcc.supervisorId);
+        if (matched) return matched;
+      }
+      if (clubPresidentAcc.supervisorName) {
+        const normTarget = normalizePersonName(clubPresidentAcc.supervisorName);
+        const matched = supervisors.find(u => {
+          const normU = normalizePersonName(u.name);
+          return normU === normTarget || normU.includes(normTarget) || normTarget.includes(normU);
+        });
+        if (matched) return matched;
+      }
+    }
+  }
+
+  return undefined;
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -680,6 +771,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               (prevUser.role === 'club_supervisor' && Boolean(prevUser.name) && u.name === prevUser.name)
             );
             if (freshUser) {
+              // Deep compare key fields to avoid triggering re-renders if nothing changed
+              if (
+                prevUser.id === freshUser.id &&
+                prevUser.name === freshUser.name &&
+                prevUser.email === freshUser.email &&
+                prevUser.phone === freshUser.phone &&
+                prevUser.clubName === freshUser.clubName &&
+                prevUser.title === freshUser.title &&
+                prevUser.department === freshUser.department &&
+                prevUser.office === freshUser.office &&
+                prevUser.bio === freshUser.bio &&
+                prevUser.category === freshUser.category &&
+                prevUser.statusAvailability === freshUser.statusAvailability &&
+                prevUser.role === freshUser.role
+              ) {
+                return prevUser;
+              }
               localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(freshUser));
               return freshUser;
             }
@@ -1812,7 +1920,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let updatedList: UserAccount[] = [];
 
     setUserAccounts(prev => {
-      updatedList = prev.map(acc => {
+      // First, update the target user account
+      const baseUpdated = prev.map(acc => {
         if (acc.id === userIdToUpdate) {
           const updated = { ...acc, ...updatedFields };
           targetAccount = updated;
@@ -1824,6 +1933,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
         return acc;
       });
+
+      // If the updated account is a supervisor, propagate their new details to club accounts
+      if (targetAccount && targetAccount.role === 'club_supervisor') {
+        const finalSupervisor = targetAccount;
+        updatedList = baseUpdated.map(acc => {
+          if (acc.role === 'club_president') {
+            const isAssigned = (
+              acc.supervisorId === userIdToUpdate || 
+              (acc.supervisorName && (acc.supervisorName === finalSupervisor.name || normalizePersonName(acc.supervisorName) === normalizePersonName(finalSupervisor.name))) ||
+              (finalSupervisor.supervisedClubNames && acc.clubName && finalSupervisor.supervisedClubNames.some(c => isSameClubName(c, acc.clubName)))
+            );
+            if (isAssigned) {
+              return {
+                ...acc,
+                supervisorId: finalSupervisor.id,
+                supervisorName: finalSupervisor.name,
+                supervisorEmail: finalSupervisor.email,
+                supervisorPhone: finalSupervisor.phone || acc.supervisorPhone,
+              };
+            }
+          }
+          return acc;
+        });
+      } else {
+        updatedList = baseUpdated;
+      }
+
       localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(updatedList));
       return updatedList;
     });
@@ -1832,7 +1968,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       saveUserAccountDoc(targetAccount).catch(e => console.warn('Firestore save user profile error:', e));
     }
 
-    // If club president or account with clubName was updated, sync all existing requests for that club
+    // 1. If club president or account with clubName was updated, sync all existing requests for that club
     const clubNameToMatch = targetAccount?.clubName || (currentUser?.id === userIdToUpdate ? currentUser?.clubName : undefined);
     if (clubNameToMatch) {
       setRequests(prev => {
@@ -1855,9 +1991,64 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     }
 
-    // Immediate background push to cloud with fresh updated accounts
+    // 2. If supervisor was updated, sync all existing requests and email logs supervised by this supervisor
+    if (targetAccount && targetAccount.role === 'club_supervisor') {
+      const supAcc = targetAccount;
+      const freshEmail = updatedFields.email || supAcc.email;
+      const freshName = updatedFields.name || supAcc.name;
+      const freshPhone = updatedFields.phone || supAcc.phone;
+
+      setRequests(prev => {
+        const updatedReqs = prev.map(r => {
+          const isSupervisedReq = (
+            r.supervisorId === userIdToUpdate ||
+            (r.supervisorName && (r.supervisorName === supAcc.name || normalizePersonName(r.supervisorName) === normalizePersonName(supAcc.name))) ||
+            (supAcc.supervisedClubNames && supAcc.supervisedClubNames.some(c => isSameClubName(c, r.clubName)))
+          );
+
+          if (isSupervisedReq) {
+            const updated: ClubRequest = {
+              ...r,
+              supervisorId: supAcc.id,
+              supervisorName: freshName,
+              supervisorEmail: freshEmail,
+              supervisorPhone: freshPhone || r.supervisorPhone,
+            };
+            saveRequestDoc(updated).catch(e => console.warn('Firestore sync supervisor to req error:', e));
+            return updated;
+          }
+          return r;
+        });
+        localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(updatedReqs));
+        return updatedReqs;
+      });
+
+      // Also synchronize email logs recipient info
+      setEmailLogs(prev => {
+        const updatedLogs = prev.map(log => {
+          if (
+            log.recipientRole === 'club_supervisor' &&
+            (log.recipientEmail === targetAccount?.email || 
+             log.recipientName === targetAccount?.name || 
+             normalizePersonName(log.recipientName) === normalizePersonName(targetAccount?.name))
+          ) {
+            return {
+              ...log,
+              recipientEmail: freshEmail || log.recipientEmail,
+              recipientName: freshName || log.recipientName,
+            };
+          }
+          return log;
+        });
+        localStorage.setItem(STORAGE_KEYS.EMAIL_LOGS, JSON.stringify(updatedLogs));
+        return updatedLogs;
+      });
+    }
+
+    // Immediate background push to cloud with fresh updated accounts and requests
     pushToCloudGist({
       userAccounts: updatedList.length > 0 ? updatedList : userAccounts,
+      requests: requests,
     });
   };
 
@@ -2251,27 +2442,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ? currentUser.phone
       : (formData.presidentPhone || '0550000000');
 
-    // Resolve club supervisor
+    // Resolve club supervisor with latest updated profile data
     const clubAccount = userAccounts.find(u => u.role === 'club_president' && (u.clubName === resolvedClubName || u.id === currentUser?.id));
-    const resolvedSupervisorId = currentUser?.supervisorId || clubAccount?.supervisorId;
-    let supervisorAccount = userAccounts.find(u => u.role === 'club_supervisor' && (
-      (resolvedSupervisorId && u.id === resolvedSupervisorId) ||
-      (currentUser?.supervisorName && u.name === currentUser.supervisorName) ||
-      (clubAccount?.supervisorName && u.name === clubAccount.supervisorName) ||
-      (u.supervisedClubNames && u.supervisedClubNames.includes(resolvedClubName))
-    ));
-
-    const resolvedSupervisorName = currentUser?.supervisorName || clubAccount?.supervisorName || supervisorAccount?.name || (resolvedSupervisorId ? userAccounts.find(u => u.id === resolvedSupervisorId)?.name : undefined);
+    const initialSupervisorId = currentUser?.supervisorId || clubAccount?.supervisorId;
+    const initialSupervisorName = currentUser?.supervisorName || clubAccount?.supervisorName;
     
-    // If not matched, try finding supervisor who has this club in supervisedClubNames
-    if (!supervisorAccount && resolvedClubName) {
-      supervisorAccount = userAccounts.find(u => u.role === 'club_supervisor' && u.supervisedClubNames?.some(c => isSameClubName(c, resolvedClubName)));
-    }
+    const supervisorAccount = findSupervisorForClub(
+      resolvedClubName,
+      initialSupervisorId,
+      initialSupervisorName,
+      userAccounts
+    );
 
-    const resolvedSupervisorEmail = supervisorAccount?.email || 
-      (resolvedSupervisorName 
-        ? `${resolvedSupervisorName.replace(/^(د\.|أ\.د\.|دكتور|استاذ|أستاذ|أ\.)\s*/, '').trim().replace(/\s+/g, '.').toLowerCase()}@kfupm.edu.sa` 
-        : 'club.supervisor@kfupm.edu.sa');
+    const resolvedSupervisorId = supervisorAccount?.id || initialSupervisorId;
+    const resolvedSupervisorName = supervisorAccount?.name || initialSupervisorName || (initialSupervisorId ? userAccounts.find(u => u.id === initialSupervisorId)?.name : undefined);
+    
+    // Always use the latest updated email from the supervisor profile if available
+    const resolvedSupervisorEmail = (supervisorAccount?.email && supervisorAccount.email.trim())
+      ? supervisorAccount.email.trim()
+      : (resolvedSupervisorName 
+          ? `${resolvedSupervisorName.replace(/^(د\.|أ\.د\.|دكتور|دكتورة|استاذ|أستاذ|أستاذة|أ\.)\s*/, '').trim().replace(/\s+/g, '.').toLowerCase()}@kfupm.edu.sa` 
+          : 'club.supervisor@kfupm.edu.sa');
 
     const hasSupervisor = Boolean(resolvedSupervisorId || resolvedSupervisorName || supervisorAccount);
 
@@ -2605,14 +2796,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     if (hasSupervisor) {
-      // Trigger email update to supervisor
-      const supervisorAccount = userAccounts.find(u => u.role === 'club_supervisor' && (
-        (updatedRequest.supervisorId && u.id === updatedRequest.supervisorId) ||
-        (updatedRequest.supervisorName && u.name === updatedRequest.supervisorName) ||
-        (u.supervisedClubNames && u.supervisedClubNames.includes(updatedRequest.clubName))
-      ));
-      const targetEmail = updatedRequest.supervisorEmail || supervisorAccount?.email || 'club.supervisor@kfupm.edu.sa';
-      const targetName = updatedRequest.supervisorName || supervisorAccount?.name || 'المشرف الأكاديمي';
+      // Trigger email update to supervisor with latest updated profile
+      const supervisorAccount = findSupervisorForClub(
+        updatedRequest.clubName,
+        updatedRequest.supervisorId,
+        updatedRequest.supervisorName,
+        userAccounts
+      );
+      const targetEmail = (supervisorAccount?.email && supervisorAccount.email.trim()) 
+        ? supervisorAccount.email.trim() 
+        : (updatedRequest.supervisorEmail || 'club.supervisor@kfupm.edu.sa');
+      const targetName = supervisorAccount?.name || updatedRequest.supervisorName || 'المشرف الأكاديمي';
 
       sendSupervisorEmailNotification({
         request: updatedRequest,
@@ -2665,15 +2859,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { success: false, message: 'لم يتم العثور على الطلب المحدد' };
     }
 
-    const supervisorAccount = userAccounts.find(u => u.role === 'club_supervisor' && (
-      (targetReq.supervisorId && u.id === targetReq.supervisorId) ||
-      (targetReq.supervisorName && u.name === targetReq.supervisorName) ||
-      (u.supervisedClubNames && u.supervisedClubNames.some(c => isSameClubName(c, targetReq.clubName)))
-    ));
+    // Dynamically resolve the freshest supervisor details from userAccounts
+    const supervisorAccount = findSupervisorForClub(
+      targetReq.clubName,
+      targetReq.supervisorId,
+      targetReq.supervisorName,
+      userAccounts
+    );
 
-    const targetEmail = targetReq.supervisorEmail || supervisorAccount?.email || 
-      (targetReq.supervisorName ? `${targetReq.supervisorName.replace(/^(د\.|أ\.د\.|دكتور|استاذ|أستاذ|أ\.)\s*/, '').trim().replace(/\s+/g, '.').toLowerCase()}@kfupm.edu.sa` : 'club.supervisor@kfupm.edu.sa');
-    const targetName = targetReq.supervisorName || supervisorAccount?.name || 'المشرف الأكاديمي';
+    // Always prioritize the updated supervisorAccount.email
+    const targetEmail = (supervisorAccount?.email && supervisorAccount.email.trim())
+      ? supervisorAccount.email.trim()
+      : (targetReq.supervisorEmail || 
+          (targetReq.supervisorName ? `${targetReq.supervisorName.replace(/^(د\.|أ\.د\.|دكتور|دكتورة|استاذ|أستاذ|أستاذة|أ\.)\s*/, '').trim().replace(/\s+/g, '.').toLowerCase()}@kfupm.edu.sa` : 'club.supervisor@kfupm.edu.sa'));
+    
+    const targetName = supervisorAccount?.name || targetReq.supervisorName || 'المشرف الأكاديمي';
 
     try {
       const res = await sendSupervisorEmailNotification({
@@ -2704,10 +2904,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
       }
 
-      // Update request state with email sent status
+      // Update request state with updated supervisor email and sent status
       const updatedReq: ClubRequest = {
         ...targetReq,
         supervisorEmail: targetEmail,
+        supervisorName: targetName,
         supervisorEmailSent: true,
         supervisorEmailSentAt: new Date().toISOString(),
       };
@@ -2723,24 +2924,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const openEmailPreviewForRequest = (requestId: string) => {
+    const req = requests.find(r => r.id === requestId);
+    const supervisorAccount = findSupervisorForClub(
+      req?.clubName || '',
+      req?.supervisorId,
+      req?.supervisorName,
+      userAccounts
+    );
+
+    const targetEmail = (supervisorAccount?.email && supervisorAccount.email.trim())
+      ? supervisorAccount.email.trim()
+      : (req?.supervisorEmail || 
+          (req?.supervisorName ? `${req.supervisorName.replace(/^(د\.|أ\.د\.|دكتور|دكتورة|استاذ|أستاذ|أستاذة|أ\.)\s*/, '').trim().replace(/\s+/g, '.').toLowerCase()}@kfupm.edu.sa` : 'club.supervisor@kfupm.edu.sa'));
+    
+    const targetName = supervisorAccount?.name || req?.supervisorName || 'المشرف الأكاديمي';
+
     const existingLog = emailLogs.find(l => l.requestId === requestId);
     if (existingLog) {
-      setSelectedEmailLog(existingLog);
+      // Refresh log recipient with latest updated supervisor details
+      const refreshedLog: EmailNotificationLog = {
+        ...existingLog,
+        recipientEmail: targetEmail,
+        recipientName: targetName,
+      };
+      setSelectedEmailLog(refreshedLog);
       setIsEmailPreviewModalOpen(true);
       return;
     }
 
-    const req = requests.find(r => r.id === requestId);
     if (req) {
-      const supervisorAccount = userAccounts.find(u => u.role === 'club_supervisor' && (
-        (req.supervisorId && u.id === req.supervisorId) ||
-        (req.supervisorName && u.name === req.supervisorName) ||
-        (u.supervisedClubNames && u.supervisedClubNames.some(c => isSameClubName(c, req.clubName)))
-      ));
-      const targetEmail = req.supervisorEmail || supervisorAccount?.email || 
-        (req.supervisorName ? `${req.supervisorName.replace(/^(د\.|أ\.د\.|دكتور|استاذ|أستاذ|أ\.)\s*/, '').trim().replace(/\s+/g, '.').toLowerCase()}@kfupm.edu.sa` : 'club.supervisor@kfupm.edu.sa');
-      const targetName = req.supervisorName || supervisorAccount?.name || 'المشرف الأكاديمي';
-
       const emailHtml = buildSupervisorEmailHtml({
         request: req,
         supervisorName: targetName,

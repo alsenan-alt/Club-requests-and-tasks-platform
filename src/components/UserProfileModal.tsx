@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
   User, 
@@ -94,6 +94,17 @@ export const UserProfileModal: React.FC = () => {
   const [newStaffBio, setNewStaffBio] = useState('');
   const [newStaffAvatarBg, setNewStaffAvatarBg] = useState('from-indigo-600 to-blue-700');
 
+  // Edit Supervisor State for Admin
+  const [editingSupervisor, setEditingSupervisor] = useState<UserAccount | null>(null);
+  const [editSupName, setEditSupName] = useState('');
+  const [editSupTitle, setEditSupTitle] = useState('');
+  const [editSupDept, setEditSupDept] = useState('');
+  const [editSupEmail, setEditSupEmail] = useState('');
+  const [editSupPhone, setEditSupPhone] = useState('');
+  const [editSupOffice, setEditSupOffice] = useState('');
+  const [editSupBio, setEditSupBio] = useState('');
+  const [editSupClubs, setEditSupClubs] = useState<string[]>([]);
+
   // Edit Staff State
   const [editStaffName, setEditStaffName] = useState('');
   const [editStaffTitle, setEditStaffTitle] = useState('');
@@ -137,52 +148,63 @@ export const UserProfileModal: React.FC = () => {
   const [customNewClubCat, setCustomNewClubCat] = useState('');
   const [newClubPassword, setNewClubPassword] = useState('');
 
+  // Track open state and active user id so form only initializes upon opening or user switch, NOT during active typing!
+  const prevOpenRef = useRef(false);
+  const prevUserIdRef = useRef<string | null>(null);
+
   // Load user data into form
   useEffect(() => {
-    if (currentUser) {
-      setName(currentUser.name || '');
-      setClubName(currentUser.clubName || '');
-      setTitle(currentUser.title || '');
-      setDepartment(currentUser.department || '');
-      setPhone(currentUser.phone || '');
-      setEmail(currentUser.email || '');
-      setOffice(currentUser.office || '');
-      
-      const standardCats = [
-        'تقني وهندسي',
-        'علمي وبحثي',
-        'ثقافي وفكري',
-        'اجتماعي وتطوعي',
-        'فنون وإبداع',
-        'رياضي وكشفي',
-        'قيادي وتطويري',
-        'ريادة أعمال وابتكار',
-        'إعلامي وتواصلي',
-        'صحي وبيئي',
-        'عام'
-      ];
-      const currentCat = currentUser.category || 'تقني وهندسي';
-      if (standardCats.includes(currentCat)) {
-        setCategory(currentCat);
-        setCustomCategory('');
-      } else {
-        setCategory('custom');
-        setCustomCategory(currentCat);
-      }
+    if (currentUser && isUserProfileModalOpen) {
+      const isJustOpened = !prevOpenRef.current && isUserProfileModalOpen;
+      const isUserChanged = prevUserIdRef.current !== currentUser.id;
 
-      setBio(currentUser.bio || '');
-      setMembersCount(currentUser.membersCount || 35);
-      setSocialHandle(currentUser.socialHandle || '@club_kfupm');
-      setStatusAvailability(currentUser.statusAvailability || 'available');
-      
-      // Reset password states
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmNewPassword('');
-      setPasswordError('');
-      setPasswordSuccess('');
+      if (isJustOpened || isUserChanged) {
+        setName(currentUser.name || '');
+        setClubName(currentUser.clubName || '');
+        setTitle(currentUser.title || '');
+        setDepartment(currentUser.department || '');
+        setPhone(currentUser.phone || '');
+        setEmail(currentUser.email || '');
+        setOffice(currentUser.office || '');
+        
+        const standardCats = [
+          'تقني وهندسي',
+          'علمي وبحثي',
+          'ثقافي وفكري',
+          'اجتماعي وتطوعي',
+          'فنون وإبداع',
+          'رياضي وكشفي',
+          'قيادي وتطويري',
+          'ريادة أعمال وابتكار',
+          'إعلامي وتواصلي',
+          'صحي وبيئي',
+          'عام'
+        ];
+        const currentCat = currentUser.category || 'تقني وهندسي';
+        if (standardCats.includes(currentCat)) {
+          setCategory(currentCat);
+          setCustomCategory('');
+        } else {
+          setCategory('custom');
+          setCustomCategory(currentCat);
+        }
+
+        setBio(currentUser.bio || '');
+        setMembersCount(currentUser.membersCount || 35);
+        setSocialHandle(currentUser.socialHandle || '@club_kfupm');
+        setStatusAvailability(currentUser.statusAvailability || 'available');
+        
+        // Reset password states
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmNewPassword('');
+        setPasswordError('');
+        setPasswordSuccess('');
+      }
     }
-  }, [currentUser, isUserProfileModalOpen]);
+    prevOpenRef.current = isUserProfileModalOpen;
+    prevUserIdRef.current = currentUser?.id || null;
+  }, [currentUser?.id, isUserProfileModalOpen]);
 
   if (!isUserProfileModalOpen || !currentUser) return null;
 
@@ -314,6 +336,44 @@ export const UserProfileModal: React.FC = () => {
     setSaveAlertMessage('تم تسجيل واعتماد المشرف الأكاديمي وتفعيل حسابه بنجاح!');
     setShowSaveAlert(true);
     setTimeout(() => setShowSaveAlert(false), 3000);
+  };
+
+  // Handle Admin Editing Supervisor Details
+  const handleStartEditSupervisor = (sup: UserAccount) => {
+    setEditingSupervisor(sup);
+    setEditSupName(sup.name || '');
+    setEditSupTitle(sup.title || 'مشرف أكاديمي معتمد');
+    setEditSupDept(sup.department || 'إشراف الأندية الطلابية');
+    setEditSupEmail(sup.email || '');
+    setEditSupPhone(sup.phone || '');
+    setEditSupOffice(sup.office || 'مبنى الكلية / العمادة');
+    setEditSupBio(sup.bio || '');
+    setEditSupClubs(sup.supervisedClubNames || []);
+  };
+
+  const handleSaveEditedSupervisor = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSupervisor) return;
+    if (!editSupName.trim()) {
+      alert('يرجى إدخال اسم المشرف الأكاديمي');
+      return;
+    }
+
+    updateUserProfile({
+      name: editSupName.trim(),
+      email: editSupEmail.trim(),
+      phone: editSupPhone.trim(),
+      title: editSupTitle.trim() || 'مشرف أكاديمي معتمد',
+      department: editSupDept.trim() || 'إشراف الأندية الطلابية',
+      office: editSupOffice.trim() || 'مبنى الكلية / العمادة',
+      bio: editSupBio.trim(),
+      supervisedClubNames: editSupClubs,
+    }, editingSupervisor.id);
+
+    setEditingSupervisor(null);
+    setSaveAlertMessage(`تم تحديث بيانات المشرف (${editSupName}) وتحديث بريده في كافة الطلبات والإشعارات بنجاح.`);
+    setShowSaveAlert(true);
+    setTimeout(() => setShowSaveAlert(false), 4000);
   };
 
   // Handle Admin Creating New Staff Member
@@ -1573,6 +1633,16 @@ export const UserProfileModal: React.FC = () => {
 
                         <button
                           type="button"
+                          onClick={() => handleStartEditSupervisor(supUser)}
+                          className="px-2.5 py-1 text-xs font-bold text-indigo-700 hover:text-white hover:bg-indigo-600 border border-indigo-300 hover:border-indigo-600 rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                          title={`تعديل بيانات وبريد المشرف ${supUser.name}`}
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>تعديل البيانات</span>
+                        </button>
+
+                        <button
+                          type="button"
                           onClick={() => {
                             setResetTargetUser(supUser);
                             setAdminResetNewPassword('');
@@ -1599,6 +1669,146 @@ export const UserProfileModal: React.FC = () => {
                   );
                 })}
               </div>
+
+              {/* Edit Supervisor Modal Dialog */}
+              {editingSupervisor && (
+                <div className="fixed inset-0 z-60 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+                  <div className="bg-white rounded-3xl p-6 max-w-xl w-full border border-indigo-200 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto font-['Cairo',sans-serif]">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-700 flex items-center justify-center">
+                          <Edit3 className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-slate-900">تعديل بيانات المشرف الأكاديمي</h4>
+                          <p className="text-[11px] text-slate-500">تحديث البريد الإلكتروني المعتمد والهاتف والأندية المسندة</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEditingSupervisor(null)}
+                        className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleSaveEditedSupervisor} className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1 sm:col-span-2">
+                          <label className="text-xs font-bold text-slate-700">الاسم الكامل للمشرف الأكاديمي *</label>
+                          <input
+                            type="text"
+                            required
+                            value={editSupName}
+                            onChange={(e) => setEditSupName(e.target.value)}
+                            placeholder="مثال: د. محمد الشامي"
+                            className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                        </div>
+
+                        <div className="space-y-1 sm:col-span-2">
+                          <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                            <span>البريد الإلكتروني الجامعي المعتمد (للإشعارات الرسمية) *</span>
+                            <span className="text-[10px] text-indigo-700 font-semibold bg-indigo-50 px-2 py-0.5 rounded-full">يتلقى إشعارات الطلبات فوراً</span>
+                          </label>
+                          <input
+                            type="email"
+                            required
+                            value={editSupEmail}
+                            onChange={(e) => setEditSupEmail(e.target.value)}
+                            placeholder="مثال: supervisor@kfupm.edu.sa"
+                            className="w-full px-3 py-2 text-xs border border-indigo-300 bg-indigo-50/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                          />
+                          <p className="text-[10px] text-slate-500">
+                            سيتم توجيه جميع إشعارات الفعاليات والطلبات الجديدة المرسلة من رؤساء الأندية مباشرة إلى هذا البريد.
+                          </p>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-xs font-bold text-slate-700">رقم الهاتف / الجوال</label>
+                          <input
+                            type="tel"
+                            value={editSupPhone}
+                            onChange={(e) => setEditSupPhone(e.target.value)}
+                            placeholder="مثال: 0551234567"
+                            className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-xs font-bold text-slate-700">المكتب / المبنى</label>
+                          <input
+                            type="text"
+                            value={editSupOffice}
+                            onChange={(e) => setEditSupOffice(e.target.value)}
+                            placeholder="مثال: مبنى 24 - غرفة 105"
+                            className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-xs font-bold text-slate-700">المسمى الأكاديمي</label>
+                          <input
+                            type="text"
+                            value={editSupTitle}
+                            onChange={(e) => setEditSupTitle(e.target.value)}
+                            placeholder="مثال: أستاذ مساعد / مشرف أكاديمي"
+                            className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-xs font-bold text-slate-700">القسم / الكلية</label>
+                          <input
+                            type="text"
+                            value={editSupDept}
+                            onChange={(e) => setEditSupDept(e.target.value)}
+                            placeholder="مثال: قسم علوم الحاسب"
+                            className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                        </div>
+
+                        <div className="space-y-1 sm:col-span-2">
+                          <label className="text-xs font-bold text-slate-700">نبذة تعريفية</label>
+                          <textarea
+                            rows={2}
+                            value={editSupBio}
+                            onChange={(e) => setEditSupBio(e.target.value)}
+                            placeholder="نبذة عن المشرف الأكاديمي واهتماماته وساعات الإشراف..."
+                            className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Notice Banner */}
+                      <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-[11px] text-emerald-900 flex items-start gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <span>
+                          <strong>تحديث فوري وشامل:</strong> عند حفظ التعديلات، سيتم تحديث بريد المشرف في سجل المنظومة وجميع الطلبات المسندة إليه حالياً ومستقبلاً وإرسال الإشعارات البريدية له مباشرة.
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                        <button
+                          type="button"
+                          onClick={() => setEditingSupervisor(null)}
+                          className="px-4 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+                        >
+                          إلغاء
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-md shadow-indigo-600/20 flex items-center gap-1.5 cursor-pointer active:scale-95"
+                        >
+                          <Save className="w-4 h-4" />
+                          <span>حفظ وتحديث المشرف</span>
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
 
               {/* Confirm Delete Supervisor Modal Dialog */}
               {supervisorToDelete && (
