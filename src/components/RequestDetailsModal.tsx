@@ -43,12 +43,16 @@ export const RequestDetailsModal: React.FC<Props> = ({ requestId, onClose }) => 
     staffMembers,
     userAccounts,
     setEditingRequest,
-    setIsEditRequestModalOpen
+    setIsEditRequestModalOpen,
+    openEmailPreviewForRequest,
+    resendSupervisorEmail,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'print_form'>('overview');
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
   const [deletingTarget, setDeletingTarget] = useState<{ task?: Task; request: any } | null>(null);
+  const [isResendingEmail, setIsResendingEmail] = useState(false);
+  const [emailStatusMsg, setEmailStatusMsg] = useState<string | null>(null);
 
   const request = requests.find(r => r.id === requestId);
 
@@ -205,6 +209,67 @@ export const RequestDetailsModal: React.FC<Props> = ({ requestId, onClose }) => 
                     </div>
                     <span className="text-[11px] block">{progressPct}% مكتمل</span>
                     <span className="text-[10px] text-slate-500">{completedCount} من {request.tasks.length} مهام</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Supervisor Automated Email Notification Card */}
+              <div className="bg-gradient-to-r from-emerald-950 via-teal-950 to-slate-900 rounded-2xl p-4 sm:p-5 text-white border border-emerald-800 shadow-md">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-300 flex items-center justify-center font-bold border border-emerald-400/30 shrink-0 mt-0.5">
+                      <Mail className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[11px] font-bold bg-emerald-400/20 text-emerald-300 px-2.5 py-0.5 rounded-full border border-emerald-400/30">
+                          إشعار بريد إلكتروني رسمي (KFUPM Mail)
+                        </span>
+                        <span className="text-[11px] text-emerald-400/80 font-medium">
+                          {request.supervisorEmailSent ? '✅ تم إرسال الإشعار آلياً' : '⏳ جاري التوجيه'}
+                        </span>
+                      </div>
+                      <h4 className="text-sm font-bold text-white mt-1">
+                        إشعار المشرف الأكاديمي: {request.supervisorName || 'المشرف الأكاديمي'} ({request.supervisorEmail || 'club.supervisor@kfupm.edu.sa'})
+                      </h4>
+                      <p className="text-xs text-slate-300 mt-0.5">
+                        تم إرسال تفاصيل الفعالية ورابط الاعتماد المباشر فور رفع رئيس النادي للطلب.
+                      </p>
+                      {emailStatusMsg && (
+                        <p className="text-xs text-amber-300 mt-1 font-semibold animate-pulse">
+                          {emailStatusMsg}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => openEmailPreviewForRequest(request.id)}
+                      className="flex-1 sm:flex-none px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>معاينة البريد</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isResendingEmail}
+                      onClick={async () => {
+                        setIsResendingEmail(true);
+                        setEmailStatusMsg('جاري إعادة إرسال البريد الإلكتروني...');
+                        const res = await resendSupervisorEmail(request.id);
+                        setIsResendingEmail(false);
+                        setEmailStatusMsg(res.message);
+                        setTimeout(() => setEmailStatusMsg(null), 5000);
+                      }}
+                      className="flex-1 sm:flex-none px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-xl transition-all border border-white/10 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      title="إعادة إرسال البريد الإلكتروني للمشرف"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>{isResendingEmail ? 'جاري الإرسال...' : 'إعادة إرسال'}</span>
+                    </button>
                   </div>
                 </div>
               </div>

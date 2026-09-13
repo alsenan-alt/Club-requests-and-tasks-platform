@@ -44,7 +44,8 @@ export const ClubSupervisorView: React.FC<Props> = ({ onOpenRequestDetails }) =>
     rejectRequestBySupervisor,
     requestChangesBySupervisor,
     setSelectedRequestId,
-    staffMembers
+    staffMembers,
+    openEmailPreviewForRequest,
   } = useApp();
 
   const [activeSubTab, setActiveSubTab] = useState<'pending' | 'resubmitted' | 'approved' | 'all'>('pending');
@@ -445,6 +446,15 @@ export const ClubSupervisorView: React.FC<Props> = ({ onOpenRequestDetails }) =>
                       >
                         <XCircle className="w-4 h-4" />
                         <span>اعتذار</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => openEmailPreviewForRequest(request.id)}
+                        className="p-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold transition-colors cursor-pointer"
+                        title="معاينة الإشعار البريدي الرسمي الوارد"
+                      >
+                        <Mail className="w-4 h-4 text-emerald-700" />
                       </button>
 
                       <button

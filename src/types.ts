@@ -171,8 +171,28 @@ export interface ClubRequest {
   status: RequestStatus;
   tasks: Task[];
   hasOfficialLetter?: boolean;
+  supervisorEmail?: string;
+  supervisorEmailSent?: boolean;
+  supervisorEmailSentAt?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface EmailNotificationLog {
+  id: string;
+  requestId: string;
+  requestNumber: string;
+  clubName: string;
+  eventTitle: string;
+  recipientEmail: string;
+  recipientName: string;
+  recipientRole: 'club_supervisor' | 'staff' | 'admin' | 'club_president';
+  subject: string;
+  bodyHtml: string;
+  bodyText: string;
+  sentAt: string;
+  status: 'sent' | 'delivered' | 'failed' | 'pending';
+  trigger: 'new_request_submission' | 'request_resubmission' | 'manual_resend';
 }
 
 export interface NotificationItem {

@@ -11,8 +11,14 @@ import {
   UserAccount,
   ServiceItem,
   ServiceField,
-  DepartmentId
+  DepartmentId,
+  EmailNotificationLog
 } from '../types';
+import { 
+  buildSupervisorEmailHtml,
+  buildSupervisorEmailText,
+  sendSupervisorEmailNotification
+} from '../utils/emailService';
 import { 
   STAFF_MEMBERS, 
   DEPARTMENTS, 
@@ -211,6 +217,13 @@ interface AppContextType {
   clearAllRequests: (options?: { academicYear?: string; archiveReason?: string }) => { success: boolean; message: string };
   portalTheme: string;
   setPortalTheme: (themeId: string) => void;
+  emailLogs: EmailNotificationLog[];
+  selectedEmailLog: EmailNotificationLog | null;
+  setSelectedEmailLog: (log: EmailNotificationLog | null) => void;
+  isEmailPreviewModalOpen: boolean;
+  setIsEmailPreviewModalOpen: (open: boolean) => void;
+  resendSupervisorEmail: (requestId: string) => Promise<{ success: boolean; message: string }>;
+  openEmailPreviewForRequest: (requestId: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -227,6 +240,7 @@ const STORAGE_KEYS = {
   ACADEMIC_YEAR: 'club_current_academic_year_v2',
   LAST_MODIFIED: 'club_last_modified_timestamp_v2',
   PORTAL_THEME: 'club_portal_theme_v2',
+  EMAIL_LOGS: 'club_email_logs_v2',
 };
 
 // Robust helper functions for Arabic club name matching & normalization
@@ -498,6 +512,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return INITIAL_NOTIFICATIONS;
   });
 
+  const [emailLogs, setEmailLogs] = useState<EmailNotificationLog[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.EMAIL_LOGS);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error(e);
+    }
+    return [];
+  });
+
+  const [selectedEmailLog, setSelectedEmailLog] = useState<EmailNotificationLog | null>(null);
+  const [isEmailPreviewModalOpen, setIsEmailPreviewModalOpen] = useState(false);
+
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [isNewRequestModalOpen, setIsNewRequestModalOpen] = useState(false);
   const [editingRequest, setEditingRequest] = useState<ClubRequest | null>(null);
@@ -679,6 +706,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setNotifications(cloudData.notifications);
           localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(cloudData.notifications));
         }
+
+        if (Array.isArray(cloudData.emailLogs)) {
+          setEmailLogs(cloudData.emailLogs);
+          localStorage.setItem(STORAGE_KEYS.EMAIL_LOGS, JSON.stringify(cloudData.emailLogs));
+        }
         
         const newTimestamp = cloudTime || Date.now();
         localStorage.setItem(STORAGE_KEYS.LAST_MODIFIED, String(newTimestamp));
@@ -729,6 +761,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         userAccounts: customPayload?.userAccounts || userAccounts,
         services: customPayload?.services || services,
         notifications: customPayload?.notifications || notifications,
+        emailLogs: customPayload?.emailLogs || emailLogs,
         clubsList: customPayload?.clubsList || dynamicClubs,
         deletedAccountIds: customPayload?.deletedAccountIds || deletedAccountIds,
         deletedServiceIds: customPayload?.deletedServiceIds || deletedServiceIds,
@@ -2221,9 +2254,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Resolve club supervisor
     const clubAccount = userAccounts.find(u => u.role === 'club_president' && (u.clubName === resolvedClubName || u.id === currentUser?.id));
     const resolvedSupervisorId = currentUser?.supervisorId || clubAccount?.supervisorId;
-    const resolvedSupervisorName = currentUser?.supervisorName || clubAccount?.supervisorName || (resolvedSupervisorId ? userAccounts.find(u => u.id === resolvedSupervisorId)?.name : undefined);
+    let supervisorAccount = userAccounts.find(u => u.role === 'club_supervisor' && (
+      (resolvedSupervisorId && u.id === resolvedSupervisorId) ||
+      (currentUser?.supervisorName && u.name === currentUser.supervisorName) ||
+      (clubAccount?.supervisorName && u.name === clubAccount.supervisorName) ||
+      (u.supervisedClubNames && u.supervisedClubNames.includes(resolvedClubName))
+    ));
 
-    const hasSupervisor = Boolean(resolvedSupervisorId || resolvedSupervisorName);
+    const resolvedSupervisorName = currentUser?.supervisorName || clubAccount?.supervisorName || supervisorAccount?.name || (resolvedSupervisorId ? userAccounts.find(u => u.id === resolvedSupervisorId)?.name : undefined);
+    
+    // If not matched, try finding supervisor who has this club in supervisedClubNames
+    if (!supervisorAccount && resolvedClubName) {
+      supervisorAccount = userAccounts.find(u => u.role === 'club_supervisor' && u.supervisedClubNames?.some(c => isSameClubName(c, resolvedClubName)));
+    }
+
+    const resolvedSupervisorEmail = supervisorAccount?.email || 
+      (resolvedSupervisorName 
+        ? `${resolvedSupervisorName.replace(/^(د\.|أ\.د\.|دكتور|استاذ|أستاذ|أ\.)\s*/, '').trim().replace(/\s+/g, '.').toLowerCase()}@kfupm.edu.sa` 
+        : 'club.supervisor@kfupm.edu.sa');
+
+    const hasSupervisor = Boolean(resolvedSupervisorId || resolvedSupervisorName || supervisorAccount);
 
     // Auto-generate routed tasks
     const tasks: Task[] = Object.entries(formData.servicesData).map(([srvKey, srvData], index) => {
@@ -2256,8 +2306,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       presidentName: resolvedPresidentName,
       presidentPhone: resolvedPresidentPhone,
       presidentEmail: resolvedPresidentEmail,
-      supervisorId: resolvedSupervisorId,
-      supervisorName: resolvedSupervisorName,
+      supervisorId: resolvedSupervisorId || supervisorAccount?.id,
+      supervisorName: resolvedSupervisorName || supervisorAccount?.name,
+      supervisorEmail: resolvedSupervisorEmail,
+      supervisorEmailSent: hasSupervisor,
+      supervisorEmailSentAt: hasSupervisor ? timestamp : undefined,
       supervisorStatus: hasSupervisor ? 'pending' : 'approved',
       eventTitle: formData.eventTitle,
       eventType: formData.eventType,
@@ -2281,7 +2334,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       newNotifs.push({
         id: `notif-${Date.now()}-sup`,
         title: `طلب اعتماد فعالية جديد: ${resolvedClubName}`,
-        message: `تم رفع طلب (${formData.eventTitle}) للاعتماد من قِبلكم لإحالته للموظفين المعنيين.`,
+        message: `تم رفع طلب (${formData.eventTitle}) للاعتماد من قِبلكم، وتم إرسال إشعار بريدي فوري إلى (${resolvedSupervisorEmail}).`,
         targetRole: 'club_supervisor',
         requestId: reqId,
         timestamp,
@@ -2293,12 +2346,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       newNotifs.push({
         id: `notif-${Date.now()}-pres`,
         title: `تم رفع الطلب للمشرف (${resolvedSupervisorName || 'المشرف الأكاديمي'})`,
-        message: `تم إرسال طلب فعالية (${formData.eventTitle}) بنجاح وبانتظار اعتماد المشرف للانتقال للتنفيذ.`,
+        message: `تم إرسال طلب فعالية (${formData.eventTitle}) بنجاح وتم إشعار المشرف الأكاديمي آلياً عبر البريد الإلكتروني.`,
         targetRole: 'club_president',
         requestId: reqId,
         timestamp,
         read: false,
         type: 'status_change',
+      });
+
+      // Automatic Email Notification Trigger
+      sendSupervisorEmailNotification({
+        request: newRequest,
+        supervisorName: resolvedSupervisorName || supervisorAccount?.name || 'المشرف الأكاديمي',
+        supervisorEmail: resolvedSupervisorEmail,
+        presidentName: resolvedPresidentName,
+        presidentPhone: resolvedPresidentPhone,
+        presidentEmail: resolvedPresidentEmail,
+        clubName: resolvedClubName,
+        eventTitle: formData.eventTitle,
+        eventDate: formData.eventDate,
+        startTime: formData.startTime,
+        endTime: formData.endTime,
+        locationSummary: formData.locationSummary,
+        expectedAttendees: Number(formData.expectedAttendees) || 50,
+        description: formData.description,
+        budget: formData.budget,
+        tasks,
+        isUpdate: false,
+      }).then(res => {
+        if (res.logItem) {
+          setEmailLogs(prev => {
+            const next = [res.logItem, ...prev.filter(l => l.id !== res.logItem.id)];
+            localStorage.setItem(STORAGE_KEYS.EMAIL_LOGS, JSON.stringify(next));
+            return next;
+          });
+        }
+      }).catch(err => {
+        console.warn('Auto supervisor email dispatch error:', err);
       });
     } else {
       // If no supervisor, route directly to staff members
@@ -2520,6 +2604,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       notifications: nextNotifications,
     });
 
+    if (hasSupervisor) {
+      // Trigger email update to supervisor
+      const supervisorAccount = userAccounts.find(u => u.role === 'club_supervisor' && (
+        (updatedRequest.supervisorId && u.id === updatedRequest.supervisorId) ||
+        (updatedRequest.supervisorName && u.name === updatedRequest.supervisorName) ||
+        (u.supervisedClubNames && u.supervisedClubNames.includes(updatedRequest.clubName))
+      ));
+      const targetEmail = updatedRequest.supervisorEmail || supervisorAccount?.email || 'club.supervisor@kfupm.edu.sa';
+      const targetName = updatedRequest.supervisorName || supervisorAccount?.name || 'المشرف الأكاديمي';
+
+      sendSupervisorEmailNotification({
+        request: updatedRequest,
+        supervisorName: targetName,
+        supervisorEmail: targetEmail,
+        presidentName: updatedRequest.presidentName,
+        presidentPhone: updatedRequest.presidentPhone,
+        presidentEmail: updatedRequest.presidentEmail,
+        clubName: updatedRequest.clubName,
+        eventTitle: updatedRequest.eventTitle,
+        eventDate: updatedRequest.eventDate,
+        startTime: updatedRequest.startTime,
+        endTime: updatedRequest.endTime,
+        locationSummary: updatedRequest.locationSummary,
+        expectedAttendees: updatedRequest.expectedAttendees,
+        description: updatedRequest.description,
+        budget: updatedRequest.budget,
+        tasks: updatedRequest.tasks,
+        isUpdate: true,
+      }).then(res => {
+        if (res.logItem) {
+          setEmailLogs(prev => {
+            const next = [res.logItem, ...prev.filter(l => l.id !== res.logItem.id)];
+            localStorage.setItem(STORAGE_KEYS.EMAIL_LOGS, JSON.stringify(next));
+            return next;
+          });
+        }
+      }).catch(err => console.warn('Resubmit email dispatch error:', err));
+    }
+
     try {
       confetti({
         particleCount: 70,
@@ -2534,6 +2657,150 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       message: `تم تحديث بيانات فعالية (${updatedRequest.eventTitle}) وإعادة إرسالها للمشرف الأكاديمي بنجاح`,
       request: updatedRequest,
     };
+  };
+
+  const resendSupervisorEmail = async (requestId: string): Promise<{ success: boolean; message: string }> => {
+    const targetReq = requests.find(r => r.id === requestId);
+    if (!targetReq) {
+      return { success: false, message: 'لم يتم العثور على الطلب المحدد' };
+    }
+
+    const supervisorAccount = userAccounts.find(u => u.role === 'club_supervisor' && (
+      (targetReq.supervisorId && u.id === targetReq.supervisorId) ||
+      (targetReq.supervisorName && u.name === targetReq.supervisorName) ||
+      (u.supervisedClubNames && u.supervisedClubNames.some(c => isSameClubName(c, targetReq.clubName)))
+    ));
+
+    const targetEmail = targetReq.supervisorEmail || supervisorAccount?.email || 
+      (targetReq.supervisorName ? `${targetReq.supervisorName.replace(/^(د\.|أ\.د\.|دكتور|استاذ|أستاذ|أ\.)\s*/, '').trim().replace(/\s+/g, '.').toLowerCase()}@kfupm.edu.sa` : 'club.supervisor@kfupm.edu.sa');
+    const targetName = targetReq.supervisorName || supervisorAccount?.name || 'المشرف الأكاديمي';
+
+    try {
+      const res = await sendSupervisorEmailNotification({
+        request: targetReq,
+        supervisorName: targetName,
+        supervisorEmail: targetEmail,
+        presidentName: targetReq.presidentName,
+        presidentPhone: targetReq.presidentPhone,
+        presidentEmail: targetReq.presidentEmail,
+        clubName: targetReq.clubName,
+        eventTitle: targetReq.eventTitle,
+        eventDate: targetReq.eventDate,
+        startTime: targetReq.startTime,
+        endTime: targetReq.endTime,
+        locationSummary: targetReq.locationSummary,
+        expectedAttendees: targetReq.expectedAttendees,
+        description: targetReq.description,
+        budget: targetReq.budget,
+        tasks: targetReq.tasks,
+        isUpdate: targetReq.isResubmitted,
+      });
+
+      if (res.logItem) {
+        setEmailLogs(prev => {
+          const next = [res.logItem, ...prev.filter(l => l.id !== res.logItem.id)];
+          localStorage.setItem(STORAGE_KEYS.EMAIL_LOGS, JSON.stringify(next));
+          return next;
+        });
+      }
+
+      // Update request state with email sent status
+      const updatedReq: ClubRequest = {
+        ...targetReq,
+        supervisorEmail: targetEmail,
+        supervisorEmailSent: true,
+        supervisorEmailSentAt: new Date().toISOString(),
+      };
+      const nextRequests = requests.map(r => r.id === requestId ? updatedReq : r);
+      setRequests(nextRequests);
+      localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(nextRequests));
+      saveRequestDoc(updatedReq).catch(e => console.warn(e));
+
+      return { success: true, message: `تم إرسال إشعار بريدي للمشرف (${targetEmail}) بنجاح.` };
+    } catch (err: any) {
+      return { success: false, message: `فشل إرسال البريد: ${err.message || 'خطأ غير متوقع'}` };
+    }
+  };
+
+  const openEmailPreviewForRequest = (requestId: string) => {
+    const existingLog = emailLogs.find(l => l.requestId === requestId);
+    if (existingLog) {
+      setSelectedEmailLog(existingLog);
+      setIsEmailPreviewModalOpen(true);
+      return;
+    }
+
+    const req = requests.find(r => r.id === requestId);
+    if (req) {
+      const supervisorAccount = userAccounts.find(u => u.role === 'club_supervisor' && (
+        (req.supervisorId && u.id === req.supervisorId) ||
+        (req.supervisorName && u.name === req.supervisorName) ||
+        (u.supervisedClubNames && u.supervisedClubNames.some(c => isSameClubName(c, req.clubName)))
+      ));
+      const targetEmail = req.supervisorEmail || supervisorAccount?.email || 
+        (req.supervisorName ? `${req.supervisorName.replace(/^(د\.|أ\.د\.|دكتور|استاذ|أستاذ|أ\.)\s*/, '').trim().replace(/\s+/g, '.').toLowerCase()}@kfupm.edu.sa` : 'club.supervisor@kfupm.edu.sa');
+      const targetName = req.supervisorName || supervisorAccount?.name || 'المشرف الأكاديمي';
+
+      const emailHtml = buildSupervisorEmailHtml({
+        request: req,
+        supervisorName: targetName,
+        supervisorEmail: targetEmail,
+        presidentName: req.presidentName,
+        presidentPhone: req.presidentPhone,
+        presidentEmail: req.presidentEmail,
+        clubName: req.clubName,
+        eventTitle: req.eventTitle,
+        eventDate: req.eventDate,
+        startTime: req.startTime,
+        endTime: req.endTime,
+        locationSummary: req.locationSummary,
+        expectedAttendees: req.expectedAttendees,
+        description: req.description,
+        budget: req.budget,
+        tasks: req.tasks,
+        isUpdate: req.isResubmitted,
+      });
+
+      const emailText = buildSupervisorEmailText({
+        request: req,
+        supervisorName: targetName,
+        supervisorEmail: targetEmail,
+        presidentName: req.presidentName,
+        presidentPhone: req.presidentPhone,
+        presidentEmail: req.presidentEmail,
+        clubName: req.clubName,
+        eventTitle: req.eventTitle,
+        eventDate: req.eventDate,
+        startTime: req.startTime,
+        endTime: req.endTime,
+        locationSummary: req.locationSummary,
+        expectedAttendees: req.expectedAttendees,
+        description: req.description,
+        budget: req.budget,
+        tasks: req.tasks,
+        isUpdate: req.isResubmitted,
+      });
+
+      const syntheticLog: EmailNotificationLog = {
+        id: `email-view-${Date.now()}`,
+        requestId: req.id,
+        requestNumber: req.requestNumber,
+        clubName: req.clubName,
+        eventTitle: req.eventTitle,
+        recipientEmail: targetEmail,
+        recipientName: targetName,
+        recipientRole: 'club_supervisor',
+        subject: `[إشعار طلب فعالية جديد] طلب اعتماد من نادي ${req.clubName}: ${req.eventTitle}`,
+        bodyHtml: emailHtml,
+        bodyText: emailText,
+        sentAt: req.supervisorEmailSentAt || req.createdAt,
+        status: 'delivered',
+        trigger: 'new_request_submission',
+      };
+
+      setSelectedEmailLog(syntheticLog);
+      setIsEmailPreviewModalOpen(true);
+    }
   };
 
   const updateTaskStatus = (
@@ -3472,6 +3739,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         clearAllRequests,
         portalTheme,
         setPortalTheme,
+        emailLogs,
+        selectedEmailLog,
+        setSelectedEmailLog,
+        isEmailPreviewModalOpen,
+        setIsEmailPreviewModalOpen,
+        resendSupervisorEmail,
+        openEmailPreviewForRequest,
         language,
         setLanguage,
         t,

@@ -1,4 +1,4 @@
-import { ClubRequest, UserAccount, ServiceItem, NotificationItem } from '../types';
+import { ClubRequest, UserAccount, ServiceItem, NotificationItem, EmailNotificationLog } from '../types';
 
 export interface GistDatabasePayload {
   version: number;
@@ -8,6 +8,7 @@ export interface GistDatabasePayload {
   userAccounts: UserAccount[];
   services: ServiceItem[];
   notifications: NotificationItem[];
+  emailLogs?: EmailNotificationLog[];
   clubsList?: string[];
   deletedAccountIds?: string[];
   deletedServiceIds?: string[];

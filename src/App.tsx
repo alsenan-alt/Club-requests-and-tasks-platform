@@ -15,6 +15,7 @@ import { UserProfileModal } from './components/UserProfileModal';
 import { LoginPortal } from './components/LoginPortal';
 import { CloudSyncModal } from './components/CloudSyncModal';
 import { EditRequestModal } from './components/EditRequestModal';
+import { EmailPreviewModal } from './components/EmailPreviewModal';
 
 const MainContent: React.FC = () => {
   const {
@@ -35,6 +36,10 @@ const MainContent: React.FC = () => {
     setActiveQuickServiceId,
     isSyncModalOpen,
     setIsSyncModalOpen,
+    selectedEmailLog,
+    setSelectedEmailLog,
+    isEmailPreviewModalOpen,
+    setIsEmailPreviewModalOpen,
     t,
     isRtl,
   } = useApp();
@@ -199,6 +204,14 @@ const MainContent: React.FC = () => {
       <CloudSyncModal
         isOpen={isSyncModalOpen}
         onClose={() => setIsSyncModalOpen(false)}
+      />
+
+      <EmailPreviewModal
+        emailLog={selectedEmailLog}
+        onClose={() => {
+          setIsEmailPreviewModalOpen(false);
+          setSelectedEmailLog(null);
+        }}
       />
     </div>
   );
