@@ -25,7 +25,8 @@ import {
   AlertTriangle,
   Shield,
   Trash2,
-  GraduationCap
+  GraduationCap,
+  LogOut
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { STAFF_MEMBERS, DEPARTMENTS } from '../data/initialData';
@@ -44,6 +45,7 @@ export const UserProfileModal: React.FC = () => {
     deleteSupervisorAccount,
     isUserProfileModalOpen, 
     setIsUserProfileModalOpen,
+    logout,
     requests,
     staffMembers
   } = useApp();
@@ -379,6 +381,18 @@ export const UserProfileModal: React.FC = () => {
                 </button>
               </>
             )}
+
+            <button
+              onClick={() => {
+                setIsUserProfileModalOpen(false);
+                logout();
+              }}
+              className="mr-auto px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500/30 hover:bg-rose-600 text-rose-100 hover:text-white border border-rose-400/40 transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
+              title="تسجيل الخروج من الحساب"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>تسجيل الخروج</span>
+            </button>
           </div>
         </div>
 

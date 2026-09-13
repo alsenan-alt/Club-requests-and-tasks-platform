@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { 
   RoleType, 
@@ -448,8 +448,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return AVAILABLE_SERVICES;
   });
 
-  // Authentication State - Default to null so the Start Page is ALWAYS the secure Login Portal
-  const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
+  // Authentication State - Default to null or stored user
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.USER);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error(e);
+    }
+    return null;
+  });
+  const currentUserRef = useRef<UserAccount | null>(currentUser);
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
 
   const [requests, setRequests] = useState<ClubRequest[]>(() => {
     try {
@@ -606,23 +618,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setUserAccounts(mergedAccounts);
           localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(mergedAccounts));
           
-          // Keep current logged-in user in sync
-          if (currentUser) {
-            const freshUser = mergedAccounts.find(u => u.id === currentUser.id);
-            if (freshUser) {
-              setCurrentUser(freshUser);
-              localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(freshUser));
-            } else if (deletedAccountSet.has(currentUser.id)) {
-              // Current user was deleted on another device, switch to admin or null
-              const adminAcc = mergedAccounts.find(u => u.role === 'admin') || null;
-              setCurrentUser(adminAcc);
-              if (adminAcc) {
-                localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(adminAcc));
-              } else {
-                localStorage.removeItem(STORAGE_KEYS.USER);
-              }
+          // Keep current logged-in user in sync ONLY if actively logged in
+          setCurrentUser(prevUser => {
+            const storedUserStr = localStorage.getItem(STORAGE_KEYS.USER);
+            if (!prevUser || !storedUserStr) {
+              return null;
             }
-          }
+            if (deletedAccountSet.has(prevUser.id)) {
+              localStorage.removeItem(STORAGE_KEYS.USER);
+              return null;
+            }
+            const freshUser = mergedAccounts.find(u => 
+              u.id === prevUser.id || 
+              (prevUser.username && u.username === prevUser.username) || 
+              (prevUser.role && prevUser.role === u.role && prevUser.role !== 'club_president')
+            );
+            if (freshUser) {
+              localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(freshUser));
+              return freshUser;
+            }
+            return prevUser;
+          });
         }
 
         if (Array.isArray(cloudData.services) && cloudData.services.length > 0) {
@@ -945,7 +961,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { success: false, message: 'لا يوجد مستخدم مسجل حالياً' };
     }
 
-    const freshAccount = userAccounts.find(u => u.id === currentUser.id) || currentUser;
+    const freshAccount = userAccounts.find(u => 
+      u.id === currentUser.id || 
+      (currentUser.staffId && u.staffId === currentUser.staffId) || 
+      (currentUser.role && u.role === currentUser.role && currentUser.role !== 'club_president')
+    ) || currentUser;
+
     const currentActualPassword = (freshAccount.password || currentUser.password || '123').trim();
     if (oldPassword.trim() !== currentActualPassword) {
       return { success: false, message: 'كلمة المرور الحالية غير صحيحة' };
@@ -962,9 +983,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     markLocalDataModified();
     setCurrentUser(updatedAccount);
+    currentUserRef.current = updatedAccount;
     localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(updatedAccount));
 
-    const updatedAccounts = userAccounts.map(acc => acc.id === currentUser.id ? updatedAccount : acc);
+    const updatedAccounts = userAccounts.map(acc => 
+      (acc.id === updatedAccount.id || (acc.staffId && acc.staffId === updatedAccount.staffId) || (acc.role === updatedAccount.role && acc.role !== 'club_president'))
+        ? updatedAccount 
+        : acc
+    );
     setUserAccounts(updatedAccounts);
     localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(updatedAccounts));
 
@@ -1003,6 +1029,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (currentUser.id === targetUserId) {
       setCurrentUser(updatedAccount);
+      currentUserRef.current = updatedAccount;
       localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(updatedAccount));
     }
 
@@ -1021,7 +1048,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const logout = () => {
     setCurrentUser(null);
+    currentUserRef.current = null;
     setSelectedRequestId(null);
+    setIsNewRequestModalOpen(false);
+    setIsEditRequestModalOpen(false);
+    setIsQuickServiceModalOpen(false);
+    setIsUserProfileModalOpen(false);
+    setIsSyncModalOpen(false);
     localStorage.removeItem(STORAGE_KEYS.USER);
   };
 
