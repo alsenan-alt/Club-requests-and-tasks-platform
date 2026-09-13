@@ -618,7 +618,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setUserAccounts(mergedAccounts);
           localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(mergedAccounts));
           
-          // Keep current logged-in user in sync ONLY if actively logged in
+          // Keep current logged-in user in sync ONLY if actively logged in with accurate ID/username match
           setCurrentUser(prevUser => {
             const storedUserStr = localStorage.getItem(STORAGE_KEYS.USER);
             if (!prevUser || !storedUserStr) {
@@ -628,10 +628,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               localStorage.removeItem(STORAGE_KEYS.USER);
               return null;
             }
+            // Strict matching by ID or exact username, or specific singleton role (admin), never generic supervisor role
             const freshUser = mergedAccounts.find(u => 
               u.id === prevUser.id || 
-              (prevUser.username && u.username === prevUser.username) || 
-              (prevUser.role && prevUser.role === u.role && prevUser.role !== 'club_president')
+              (Boolean(prevUser.username) && u.username === prevUser.username) || 
+              (prevUser.role === 'admin' && u.role === 'admin') ||
+              (Boolean(prevUser.staffId) && u.staffId === prevUser.staffId) ||
+              (prevUser.role === 'club_president' && Boolean(prevUser.clubName) && isSameClubName(u.clubName, prevUser.clubName)) ||
+              (prevUser.role === 'club_supervisor' && Boolean(prevUser.name) && u.name === prevUser.name)
             );
             if (freshUser) {
               localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(freshUser));
@@ -940,7 +944,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const validateAndLogin = (userIdOrUsername: string, passwordInput: string): { success: boolean; message?: string } => {
     const trimmedInput = (passwordInput || '').trim();
-    const found = userAccounts.find(u => u.id === userIdOrUsername || u.username === userIdOrUsername || u.role === userIdOrUsername);
+    const found = userAccounts.find(u => 
+      u.id === userIdOrUsername || 
+      u.username === userIdOrUsername || 
+      (u.role === 'admin' && userIdOrUsername === 'admin') ||
+      (Boolean(u.staffId) && u.staffId === userIdOrUsername) ||
+      (u.role.startsWith('staff_') && u.role === userIdOrUsername)
+    );
     
     if (!found) {
       return { success: false, message: 'لم يتم العثور على الحساب المحدد' };
@@ -952,6 +962,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     setCurrentUser(found);
+    currentUserRef.current = found;
     setSelectedRequestId(null);
     return { success: true };
   };
@@ -963,8 +974,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const freshAccount = userAccounts.find(u => 
       u.id === currentUser.id || 
-      (currentUser.staffId && u.staffId === currentUser.staffId) || 
-      (currentUser.role && u.role === currentUser.role && currentUser.role !== 'club_president')
+      (Boolean(currentUser.username) && u.username === currentUser.username) || 
+      (Boolean(currentUser.staffId) && u.staffId === currentUser.staffId) || 
+      (currentUser.role === 'admin' && u.role === 'admin') ||
+      (currentUser.role === 'club_president' && Boolean(currentUser.clubName) && isSameClubName(u.clubName, currentUser.clubName)) ||
+      (currentUser.role === 'club_supervisor' && Boolean(currentUser.name) && u.name === currentUser.name)
     ) || currentUser;
 
     const currentActualPassword = (freshAccount.password || currentUser.password || '123').trim();
@@ -986,11 +1000,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     currentUserRef.current = updatedAccount;
     localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(updatedAccount));
 
-    const updatedAccounts = userAccounts.map(acc => 
-      (acc.id === updatedAccount.id || (acc.staffId && acc.staffId === updatedAccount.staffId) || (acc.role === updatedAccount.role && acc.role !== 'club_president'))
-        ? updatedAccount 
-        : acc
-    );
+    const updatedAccounts = userAccounts.map(acc => {
+      const isMatch = acc.id === updatedAccount.id || 
+        (Boolean(updatedAccount.username) && acc.username === updatedAccount.username) || 
+        (Boolean(updatedAccount.staffId) && acc.staffId === updatedAccount.staffId) || 
+        (updatedAccount.role === 'admin' && acc.role === 'admin') ||
+        (updatedAccount.role === 'club_president' && Boolean(updatedAccount.clubName) && isSameClubName(acc.clubName, updatedAccount.clubName)) ||
+        (updatedAccount.role === 'club_supervisor' && Boolean(updatedAccount.name) && acc.name === updatedAccount.name);
+      return isMatch ? updatedAccount : acc;
+    });
     setUserAccounts(updatedAccounts);
     localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(updatedAccounts));
 
