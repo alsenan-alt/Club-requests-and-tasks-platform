@@ -4,7 +4,9 @@ export type RoleType =
   | 'staff_hussein'
   | 'staff_mousa'
   | 'staff_musleh'
-  | 'admin';
+  | 'admin'
+  | `staff_${string}`
+  | string;
 
 export interface UserAccount {
   id: string;

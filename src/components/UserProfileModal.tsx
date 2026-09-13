@@ -26,11 +26,14 @@ import {
   Shield,
   Trash2,
   GraduationCap,
-  LogOut
+  LogOut,
+  CheckSquare,
+  Square,
+  BadgeCheck
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { STAFF_MEMBERS, DEPARTMENTS } from '../data/initialData';
-import { RoleType, UserAccount } from '../types';
+import { RoleType, UserAccount, DepartmentId, StaffMember } from '../types';
 
 export const UserProfileModal: React.FC = () => {
   const { 
@@ -43,6 +46,8 @@ export const UserProfileModal: React.FC = () => {
     deleteClubAccount,
     registerNewSupervisor,
     deleteSupervisorAccount,
+    registerNewStaffMember,
+    deleteStaffMember,
     isUserProfileModalOpen, 
     setIsUserProfileModalOpen,
     logout,
@@ -50,7 +55,7 @@ export const UserProfileModal: React.FC = () => {
     staffMembers
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'manage_clubs' | 'manage_supervisors' | 'staff_directory'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'manage_clubs' | 'manage_supervisors' | 'manage_staff' | 'staff_directory'>('profile');
   const [showSaveAlert, setShowSaveAlert] = useState(false);
   const [saveAlertMessage, setSaveAlertMessage] = useState('تم حفظ وتحديث البيانات بنجاح في المنظومة.');
   const [isAddingNewClub, setIsAddingNewClub] = useState(false);
@@ -72,6 +77,32 @@ export const UserProfileModal: React.FC = () => {
   const [newSupOffice, setNewSupOffice] = useState('مبنى العمادة / الكلية');
   const [newSupPassword, setNewSupPassword] = useState('');
   const [newSupBio, setNewSupBio] = useState('');
+
+  // Staff management state for Admin
+  const [isAddingNewStaff, setIsAddingNewStaff] = useState(false);
+  const [staffToDelete, setStaffToDelete] = useState<UserAccount | null>(null);
+  const [editingStaff, setEditingStaff] = useState<UserAccount | null>(null);
+  const [newStaffName, setNewStaffName] = useState('');
+  const [newStaffTitle, setNewStaffTitle] = useState('مسؤول إداري معتمد');
+  const [newStaffDept, setNewStaffDept] = useState('إدارة النشاط الطلابي');
+  const [newStaffDeptIds, setNewStaffDeptIds] = useState<DepartmentId[]>(['permits', 'logistics']);
+  const [newStaffEmail, setNewStaffEmail] = useState('');
+  const [newStaffPhone, setNewStaffPhone] = useState('');
+  const [newStaffOffice, setNewStaffOffice] = useState('مبنى 10 - قسم الخدمات والفعاليات');
+  const [newStaffUsername, setNewStaffUsername] = useState('');
+  const [newStaffPassword, setNewStaffPassword] = useState('');
+  const [newStaffBio, setNewStaffBio] = useState('');
+  const [newStaffAvatarBg, setNewStaffAvatarBg] = useState('from-indigo-600 to-blue-700');
+
+  // Edit Staff State
+  const [editStaffName, setEditStaffName] = useState('');
+  const [editStaffTitle, setEditStaffTitle] = useState('');
+  const [editStaffDept, setEditStaffDept] = useState('');
+  const [editStaffEmail, setEditStaffEmail] = useState('');
+  const [editStaffPhone, setEditStaffPhone] = useState('');
+  const [editStaffOffice, setEditStaffOffice] = useState('');
+  const [editStaffBio, setEditStaffBio] = useState('');
+  const [editStaffAvatarBg, setEditStaffAvatarBg] = useState('');
 
   // Form State for current user profile
   const [name, setName] = useState('');
@@ -285,6 +316,71 @@ export const UserProfileModal: React.FC = () => {
     setTimeout(() => setShowSaveAlert(false), 3000);
   };
 
+  // Handle Admin Creating New Staff Member
+  const handleAdminCreateStaff = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newStaffName.trim()) {
+      alert('يرجى إدخال اسم الموظف المعني');
+      return;
+    }
+
+    const defaultDept = newStaffDeptIds.length > 0
+      ? newStaffDeptIds.map(d => DEPARTMENTS[d]?.name || d).join(' • ')
+      : newStaffDept.trim() || 'إدارة النشاط الطلابي';
+
+    registerNewStaffMember({
+      name: newStaffName.trim(),
+      title: newStaffTitle.trim() || 'مسؤول إداري معتمد',
+      department: defaultDept,
+      email: newStaffEmail.trim() || `${newStaffName.toLowerCase().replace(/\s+/g, '.')}@kfupm.edu.sa`,
+      phone: newStaffPhone.trim(),
+      office: newStaffOffice.trim() || 'مبنى 10 - قسم الخدمات والفعاليات',
+      username: newStaffUsername.trim(),
+      password: newStaffPassword.trim() || '123',
+      bio: newStaffBio.trim() || 'المسؤول المعني بتنفيذ ومتابعة طلبات وخدمات الفعاليات الطلابية.',
+      departmentIds: newStaffDeptIds,
+      avatarBg: newStaffAvatarBg,
+      autoLogin: false,
+    });
+
+    setNewStaffName('');
+    setNewStaffTitle('مسؤول إداري معتمد');
+    setNewStaffDept('إدارة النشاط الطلابي');
+    setNewStaffDeptIds(['permits', 'logistics']);
+    setNewStaffEmail('');
+    setNewStaffPhone('');
+    setNewStaffOffice('مبنى 10 - قسم الخدمات والفعاليات');
+    setNewStaffUsername('');
+    setNewStaffPassword('');
+    setNewStaffBio('');
+    setIsAddingNewStaff(false);
+    setSaveAlertMessage('تم تسجيل واعتماد الموظف المعني وتفعيل حسابه بنجاح!');
+    setShowSaveAlert(true);
+    setTimeout(() => setShowSaveAlert(false), 3000);
+  };
+
+  // Handle Admin Updating Staff
+  const handleAdminUpdateStaff = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingStaff) return;
+
+    updateUserProfile({
+      name: editStaffName.trim(),
+      title: editStaffTitle.trim(),
+      department: editStaffDept.trim(),
+      email: editStaffEmail.trim(),
+      phone: editStaffPhone.trim(),
+      office: editStaffOffice.trim(),
+      bio: editStaffBio.trim(),
+      avatarBg: editStaffAvatarBg,
+    }, editingStaff.id);
+
+    setEditingStaff(null);
+    setSaveAlertMessage('تم حفظ وتحديث بيانات الموظف المعني بنجاح!');
+    setShowSaveAlert(true);
+    setTimeout(() => setShowSaveAlert(false), 3000);
+  };
+
   // Club Request stats for this club
   const clubRequests = requests.filter(r => r.clubName === currentUser.clubName);
   const completedClubRequests = clubRequests.filter(r => r.status === 'completed').length;
@@ -371,13 +467,22 @@ export const UserProfileModal: React.FC = () => {
                   <span>إدارة المشرفين الأكاديميين ({userAccounts.filter(u => u.role === 'club_supervisor').length})</span>
                 </button>
                 <button
+                  onClick={() => setActiveTab('manage_staff')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    activeTab === 'manage_staff' ? 'bg-white text-slate-900 shadow-xs' : 'text-white/80 hover:bg-white/10'
+                  }`}
+                >
+                  <Briefcase className="w-3.5 h-3.5" />
+                  <span>إدارة الموظفين المعنيين 👔 ({staffMembers.length})</span>
+                </button>
+                <button
                   onClick={() => setActiveTab('staff_directory')}
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                     activeTab === 'staff_directory' ? 'bg-white text-slate-900 shadow-xs' : 'text-white/80 hover:bg-white/10'
                   }`}
                 >
-                  <Briefcase className="w-3.5 h-3.5" />
-                  <span>دليل الموظفين ({STAFF_MEMBERS.length})</span>
+                  <Users className="w-3.5 h-3.5" />
+                  <span>دليل الاتصال السريع</span>
                 </button>
               </>
             )}
@@ -1545,7 +1650,539 @@ export const UserProfileModal: React.FC = () => {
             </div>
           )}
 
-          {/* TAB 4: Staff Directory (For Admin) */}
+          {/* TAB: Manage Staff Members (For Admin) */}
+          {activeTab === 'manage_staff' && (
+            <div className="space-y-4 animate-in fade-in">
+              {/* Header & Add Button */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-indigo-50/80 border border-indigo-200 rounded-2xl">
+                <div>
+                  <h3 className="text-sm font-bold text-indigo-950 flex items-center gap-2">
+                    <Briefcase className="w-4 h-4 text-indigo-700" />
+                    <span>إدارة الموظفين المعنيين بتقديم الخدمات اللوجستية والمهام</span>
+                  </h3>
+                  <p className="text-xs text-indigo-700 mt-1">
+                    تسجيل الموظفين الجدد، تحديد مسارات وإدارات الخدمات، وتعيين كلمات المرور المباشرة
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsAddingNewStaff(!isAddingNewStaff)}
+                  className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 shrink-0 cursor-pointer active:scale-95"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>{isAddingNewStaff ? 'إلغاء الإضافة' : 'إضافة موظف معني جديد'}</span>
+                </button>
+              </div>
+
+              {/* Add New Staff Form */}
+              {isAddingNewStaff && (
+                <form onSubmit={handleAdminCreateStaff} className="p-4 sm:p-5 bg-white border-2 border-indigo-200 rounded-2xl space-y-4 shadow-sm animate-in zoom-in-95">
+                  <div className="flex items-center justify-between border-b border-indigo-100 pb-2">
+                    <h4 className="text-xs font-bold text-indigo-900 flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-indigo-600" />
+                      <span>تسجيل موظف معني جديد وتعيين صلاحياته</span>
+                    </h4>
+                    <span className="text-[11px] text-indigo-600 font-semibold bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
+                      بيانات الحساب والمهام
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">
+                        اسم الموظف الثلاثي <span className="text-rose-500">*</span>:
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={newStaffName}
+                        onChange={e => setNewStaffName(e.target.value)}
+                        placeholder="مثال: أ. عبدالله القحطاني"
+                        className="w-full text-xs p-2.5 rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">
+                        المسمى الوظيفي / الإداري:
+                      </label>
+                      <input
+                        type="text"
+                        value={newStaffTitle}
+                        onChange={e => setNewStaffTitle(e.target.value)}
+                        placeholder="مثال: مسؤول التصاريح والموافقات الأمنية"
+                        className="w-full text-xs p-2.5 rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">
+                        البريد الإلكتروني الجامعي:
+                      </label>
+                      <input
+                        type="email"
+                        value={newStaffEmail}
+                        onChange={e => setNewStaffEmail(e.target.value)}
+                        placeholder="staff.name@kfupm.edu.sa"
+                        className="w-full text-xs p-2.5 rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">
+                        رقم الجوال / التحويلة:
+                      </label>
+                      <input
+                        type="tel"
+                        value={newStaffPhone}
+                        onChange={e => setNewStaffPhone(e.target.value)}
+                        placeholder="050XXXXXXX"
+                        className="w-full text-xs p-2.5 rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">
+                        موقع المكتب ومقر العمل:
+                      </label>
+                      <input
+                        type="text"
+                        value={newStaffOffice}
+                        onChange={e => setNewStaffOffice(e.target.value)}
+                        placeholder="مبنى 10 - مكتب 115"
+                        className="w-full text-xs p-2.5 rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">
+                        اسم المستخدم لتسجيل الدخول:
+                      </label>
+                      <input
+                        type="text"
+                        value={newStaffUsername}
+                        onChange={e => setNewStaffUsername(e.target.value)}
+                        placeholder="اتركه فارغاً للتوليد التلقائي..."
+                        className="w-full text-xs p-2.5 rounded-xl bg-slate-50 border border-slate-300 font-mono focus:bg-white focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">
+                        كلمة المرور المبدئية:
+                      </label>
+                      <input
+                        type="text"
+                        value={newStaffPassword}
+                        onChange={e => setNewStaffPassword(e.target.value)}
+                        placeholder="افتراضية: 123"
+                        className="w-full text-xs p-2.5 rounded-xl bg-slate-50 border border-slate-300 font-mono focus:bg-white focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">
+                        لون التمييز والرمز التعريفي:
+                      </label>
+                      <select
+                        value={newStaffAvatarBg}
+                        onChange={e => setNewStaffAvatarBg(e.target.value)}
+                        className="w-full text-xs p-2.5 rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-indigo-500 font-semibold"
+                      >
+                        <option value="from-indigo-600 to-blue-700">نيلي وأزرق ملكي</option>
+                        <option value="from-emerald-600 to-teal-700">زمردي وفيروزي</option>
+                        <option value="from-amber-600 to-orange-700">كهرماني وبرتقالي</option>
+                        <option value="from-purple-600 to-pink-700">أرجواني وبنفسجي</option>
+                        <option value="from-cyan-600 to-blue-800">سماوي وكحلي</option>
+                        <option value="from-rose-600 to-red-700">ياقوتي وأحمر</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Department and Service Tracks Selection */}
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                      مسارات وأقسام الخدمات المسندة للموظف:
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                      {Object.entries(DEPARTMENTS).map(([deptKey, deptObj]) => {
+                        const isSelected = newStaffDeptIds.includes(deptKey as DepartmentId);
+                        return (
+                          <button
+                            type="button"
+                            key={deptKey}
+                            onClick={() => {
+                              if (isSelected) {
+                                setNewStaffDeptIds(newStaffDeptIds.filter(id => id !== deptKey));
+                              } else {
+                                setNewStaffDeptIds([...newStaffDeptIds, deptKey as DepartmentId]);
+                              }
+                            }}
+                            className={`p-2 rounded-lg text-right text-[11px] font-bold border transition-all flex items-center justify-between cursor-pointer ${
+                              isSelected
+                                ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs'
+                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            <span className="truncate">{deptObj.name}</span>
+                            {isSelected ? <CheckSquare className="w-3.5 h-3.5 shrink-0 mr-1" /> : <Square className="w-3.5 h-3.5 shrink-0 mr-1 text-slate-400" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">
+                      ملاحظات ونبذة عن مهام الموظف:
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={newStaffBio}
+                      onChange={e => setNewStaffBio(e.target.value)}
+                      placeholder="نبذة عن الموظف ومسؤولياته وساعات المراجعة..."
+                      className="w-full text-xs p-2.5 rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-indigo-100">
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingNewStaff(false)}
+                      className="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+                    >
+                      إلغاء
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>اعتماد وتسجيل الموظف سحابياً</span>
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Staff Members List */}
+              <div className="space-y-3">
+                <div className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                  <span>الموظفون المعنيون المعتمدون بالمنظومة ({staffMembers.length}):</span>
+                  <span className="text-[11px] text-slate-500 font-normal">يمكنك تعديل البيانات، وتعيين كلمات المرور، أو الحذف</span>
+                </div>
+
+                {staffMembers.map(staff => {
+                  const staffAccount = userAccounts.find(u => 
+                    u.staffId === staff.id || 
+                    u.role === staff.roleCode || 
+                    u.id === `user_staff_${staff.id}` || 
+                    u.id === staff.id
+                  );
+
+                  const activeTasksCount = requests.flatMap(r => r.tasks || []).filter(t => 
+                    t.staffId === staff.id || t.staffName === staff.name
+                  ).length;
+
+                  return (
+                    <div key={staff.id} className="p-4 bg-slate-50 hover:bg-white border border-slate-200 hover:border-indigo-300 rounded-2xl flex flex-col lg:flex-row lg:items-center justify-between gap-4 transition-all shadow-2xs hover:shadow-xs">
+                      <div className="flex items-start gap-3.5">
+                        <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${staff.avatarBg || 'from-indigo-600 to-blue-700'} text-white flex items-center justify-center font-bold text-xl shrink-0 shadow-xs`}>
+                          👔
+                        </div>
+
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h4 className="text-xs sm:text-sm font-bold text-slate-900">{staff.name}</h4>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200">
+                              {staff.title}
+                            </span>
+                            {staffAccount?.username && (
+                              <span className="text-[10px] font-mono text-slate-500 bg-white px-2 py-0.5 rounded-md border border-slate-200">
+                                👤 {staffAccount.username}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                            {staff.phone && (
+                              <a href={`tel:${staff.phone}`} className="text-[11px] text-slate-600 hover:text-indigo-600 bg-white px-2 py-0.5 rounded-md border border-slate-200 flex items-center gap-1 transition-colors">
+                                <Phone className="w-3 h-3 text-indigo-500" />
+                                <span>{staff.phone}</span>
+                              </a>
+                            )}
+                            {staff.email && (
+                              <a href={`mailto:${staff.email}`} className="text-[11px] text-slate-600 hover:text-indigo-600 bg-white px-2 py-0.5 rounded-md border border-slate-200 flex items-center gap-1 transition-colors">
+                                <Mail className="w-3 h-3 text-indigo-500" />
+                                <span>{staff.email}</span>
+                              </a>
+                            )}
+                            {staff.office && (
+                              <span className="text-[11px] text-slate-600 bg-white px-2 py-0.5 rounded-md border border-slate-200 flex items-center gap-1">
+                                <MapPin className="w-3 h-3 text-indigo-500" />
+                                <span>{staff.office}</span>
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Departments badges */}
+                          {staff.departmentIds && staff.departmentIds.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1 pt-1">
+                              {staff.departmentIds.map(dId => {
+                                const dInfo = DEPARTMENTS[dId];
+                                return (
+                                  <span key={dId} className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-200 text-slate-700">
+                                    {dInfo ? dInfo.name : dId}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-2 shrink-0 self-end lg:self-center">
+                        <span className="text-xs font-bold px-2.5 py-1 bg-indigo-50 text-indigo-800 border border-indigo-200 rounded-lg">
+                          {activeTasksCount} مهام مسندة
+                        </span>
+
+                        {staffAccount && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setResetTargetUser(staffAccount);
+                              setAdminResetNewPassword('');
+                              setAdminResetError('');
+                            }}
+                            className="px-2.5 py-1 text-xs font-bold text-amber-700 hover:text-white hover:bg-amber-600 border border-amber-300 hover:border-amber-600 rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                            title={`تغيير كلمة مرور الموظف ${staff.name}`}
+                          >
+                            <KeyRound className="w-3.5 h-3.5" />
+                            <span>كلمة المرور</span>
+                          </button>
+                        )}
+
+                        {staffAccount && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingStaff(staffAccount);
+                              setEditStaffName(staffAccount.name || staff.name);
+                              setEditStaffTitle(staffAccount.title || staff.title);
+                              setEditStaffDept(staffAccount.department || staff.departmentIds?.map(d => DEPARTMENTS[d]?.name || d).join(' • ') || '');
+                              setEditStaffEmail(staffAccount.email || staff.email);
+                              setEditStaffPhone(staffAccount.phone || staff.phone || '');
+                              setEditStaffOffice(staffAccount.office || staff.office || '');
+                              setEditStaffBio(staffAccount.bio || staff.notes || '');
+                              setEditStaffAvatarBg(staffAccount.avatarBg || staff.avatarBg || 'from-indigo-600 to-blue-700');
+                            }}
+                            className="px-2.5 py-1 text-xs font-bold text-indigo-700 hover:text-white hover:bg-indigo-600 border border-indigo-300 hover:border-indigo-600 rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                            title={`تعديل بيانات الموظف ${staff.name}`}
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                            <span>تعديل</span>
+                          </button>
+                        )}
+
+                        {staffAccount && (
+                          <button
+                            type="button"
+                            onClick={() => setStaffToDelete(staffAccount)}
+                            className="px-2.5 py-1 text-xs font-bold text-rose-600 hover:text-white hover:bg-rose-600 border border-rose-200 hover:border-rose-600 rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                            title={`حذف الموظف ${staff.name}`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>حذف</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Edit Staff Modal Dialog */}
+              {editingStaff && (
+                <div className="fixed inset-0 z-60 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+                  <div className="bg-white rounded-2xl p-5 max-w-lg w-full border border-indigo-200 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center">
+                          <Edit3 className="w-4 h-4" />
+                        </div>
+                        <h4 className="text-sm font-bold text-slate-900">تعديل بيانات الموظف المعني</h4>
+                      </div>
+                      <button
+                        onClick={() => setEditingStaff(null)}
+                        className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleAdminUpdateStaff} className="space-y-3">
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 block mb-1">اسم الموظف:</label>
+                        <input
+                          type="text"
+                          required
+                          value={editStaffName}
+                          onChange={e => setEditStaffName(e.target.value)}
+                          className="w-full text-xs p-2.5 rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 block mb-1">المسمى الوظيفي:</label>
+                        <input
+                          type="text"
+                          value={editStaffTitle}
+                          onChange={e => setEditStaffTitle(e.target.value)}
+                          className="w-full text-xs p-2.5 rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 block mb-1">الإدارة / الأقسام المسندة:</label>
+                        <input
+                          type="text"
+                          value={editStaffDept}
+                          onChange={e => setEditStaffDept(e.target.value)}
+                          className="w-full text-xs p-2.5 rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-xs font-bold text-slate-700 block mb-1">البريد الإلكتروني:</label>
+                          <input
+                            type="email"
+                            value={editStaffEmail}
+                            onChange={e => setEditStaffEmail(e.target.value)}
+                            className="w-full text-xs p-2.5 rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-indigo-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-xs font-bold text-slate-700 block mb-1">رقم الجوال:</label>
+                          <input
+                            type="tel"
+                            value={editStaffPhone}
+                            onChange={e => setEditStaffPhone(e.target.value)}
+                            className="w-full text-xs p-2.5 rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-indigo-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 block mb-1">المكتب ومقر العمل:</label>
+                        <input
+                          type="text"
+                          value={editStaffOffice}
+                          onChange={e => setEditStaffOffice(e.target.value)}
+                          className="w-full text-xs p-2.5 rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 block mb-1">نبذة وملاحظات:</label>
+                        <textarea
+                          rows={2}
+                          value={editStaffBio}
+                          onChange={e => setEditStaffBio(e.target.value)}
+                          className="w-full text-xs p-2.5 rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 block mb-1">لون التمييز:</label>
+                        <select
+                          value={editStaffAvatarBg}
+                          onChange={e => setEditStaffAvatarBg(e.target.value)}
+                          className="w-full text-xs p-2.5 rounded-xl bg-slate-50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-indigo-500"
+                        >
+                          <option value="from-indigo-600 to-blue-700">نيلي وأزرق ملكي</option>
+                          <option value="from-emerald-600 to-teal-700">زمردي وفيروزي</option>
+                          <option value="from-amber-600 to-orange-700">كهرماني وبرتقالي</option>
+                          <option value="from-purple-600 to-pink-700">أرجواني وبنفسجي</option>
+                          <option value="from-cyan-600 to-blue-800">سماوي وكحلي</option>
+                          <option value="from-rose-600 to-red-700">ياقوتي وأحمر</option>
+                        </select>
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                        <button
+                          type="button"
+                          onClick={() => setEditingStaff(null)}
+                          className="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+                        >
+                          إلغاء
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95"
+                        >
+                          <Save className="w-3.5 h-3.5" />
+                          <span>حفظ التعديلات سحابياً</span>
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* Confirm Delete Staff Modal Dialog */}
+              {staffToDelete && (
+                <div className="fixed inset-0 z-60 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+                  <div className="bg-white rounded-2xl p-5 max-w-md w-full border border-rose-200 shadow-2xl space-y-4">
+                    <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+                      <Trash2 className="w-6 h-6" />
+                    </div>
+
+                    <div className="text-center">
+                      <h4 className="text-sm font-bold text-slate-900">تأكيد حذف الموظف المعني</h4>
+                      <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+                        هل أنت متأكد من رغبتك في حذف حساب الموظف (<strong className="text-rose-600">{staffToDelete.name}</strong>) نهائياً من المنظومة؟
+                      </p>
+                    </div>
+
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <span>تنبيه: سيتم إلغاء صلاحيات الدخول لهذا الحساب وحذفه من قائمة الموظفين وتوجيه المهام.</span>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => setStaffToDelete(null)}
+                        className="px-4 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+                      >
+                        إلغاء التراجع
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const res = deleteStaffMember(staffToDelete.id);
+                          setStaffToDelete(null);
+                          setSaveAlertMessage(res.message);
+                          setShowSaveAlert(true);
+                          setTimeout(() => setShowSaveAlert(false), 3500);
+                        }}
+                        className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition-all shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>نعم، حذف الموظف نهائياً</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 4: Staff Directory (For Quick Contact) */}
           {activeTab === 'staff_directory' && (
             <div className="space-y-4 animate-in fade-in">
               <div className="text-xs text-slate-600 mb-2">
@@ -1556,16 +2193,16 @@ export const UserProfileModal: React.FC = () => {
                 {staffMembers.map(staff => (
                   <div key={staff.id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex items-start gap-3">
-                      <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${staff.avatarBg} text-white flex items-center justify-center font-bold text-lg shrink-0 shadow-2xs`}>
+                      <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${staff.avatarBg || 'from-indigo-600 to-blue-700'} text-white flex items-center justify-center font-bold text-lg shrink-0 shadow-2xs`}>
                         👔
                       </div>
                       <div>
                         <h4 className="text-xs font-bold text-slate-900">{staff.name}</h4>
                         <p className="text-[11px] text-slate-600 mt-0.5">{staff.title}</p>
                         <div className="flex flex-wrap items-center gap-3 text-[10px] text-slate-500 mt-1">
-                          <span>📞 {staff.phone}</span>
-                          <span>🏢 {staff.office}</span>
-                          <span>✉️ {staff.email}</span>
+                          {staff.phone && <span>📞 {staff.phone}</span>}
+                          {staff.office && <span>🏢 {staff.office}</span>}
+                          {staff.email && <span>✉️ {staff.email}</span>}
                         </div>
                       </div>
                     </div>

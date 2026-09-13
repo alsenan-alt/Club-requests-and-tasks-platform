@@ -93,8 +93,23 @@ interface AppContextType {
     supervisedClubNames?: string[];
     autoLogin?: boolean;
   }) => UserAccount;
+  registerNewStaffMember: (formData: {
+    name: string;
+    title?: string;
+    department?: string;
+    email?: string;
+    phone?: string;
+    username?: string;
+    password?: string;
+    office?: string;
+    bio?: string;
+    departmentIds?: DepartmentId[];
+    avatarBg?: string;
+    autoLogin?: boolean;
+  }) => UserAccount;
   deleteClubAccount: (clubUserId: string) => { success: boolean; message: string };
   deleteSupervisorAccount: (supervisorId: string) => { success: boolean; message: string };
+  deleteStaffMember: (staffUserId: string) => { success: boolean; message: string };
   updateUserProfile: (updatedFields: Partial<UserAccount>, targetUserId?: string) => void;
   approveRequestBySupervisor: (requestId: string, supervisorNotes?: string) => void;
   rejectRequestBySupervisor: (requestId: string, reason: string) => void;
@@ -1444,6 +1459,180 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { success: true, message: `تم حذف حساب المشرف (${supName}) نهائياً` };
   };
 
+  // Register New Staff Member (Admin capability)
+  const registerNewStaffMember = (formData: {
+    name: string;
+    title?: string;
+    department?: string;
+    email?: string;
+    phone?: string;
+    username?: string;
+    password?: string;
+    office?: string;
+    bio?: string;
+    departmentIds?: DepartmentId[];
+    avatarBg?: string;
+    autoLogin?: boolean;
+  }): UserAccount => {
+    const rawId = formData.username?.trim().replace(/\s+/g, '_') || `staff_${Date.now().toString().slice(-4)}`;
+    const staffId = rawId.startsWith('staff_') ? rawId.replace(/^staff_/, '') : rawId;
+    const roleCode: RoleType = `staff_${staffId}` as RoleType;
+    const newUserId = `user_staff_${staffId}`;
+    const cleanName = formData.name.trim();
+
+    const colorGradients = [
+      'from-blue-600 to-indigo-700',
+      'from-emerald-600 to-teal-700',
+      'from-amber-600 to-orange-700',
+      'from-purple-600 to-indigo-800',
+      'from-cyan-600 to-blue-700',
+      'from-rose-600 to-pink-700',
+      'from-slate-700 to-slate-900',
+      'from-violet-600 to-purple-800'
+    ];
+    const randomBg = formData.avatarBg || colorGradients[Math.floor(Math.random() * colorGradients.length)];
+
+    const deptText = (formData.departmentIds && formData.departmentIds.length > 0)
+      ? formData.departmentIds.join(', ')
+      : formData.department?.trim() || 'إدارة النشاط الطلابي';
+
+    const newAccount: UserAccount = {
+      id: newUserId,
+      username: formData.username?.trim() || `staff_${staffId}`,
+      password: (formData.password || '123').trim(),
+      name: cleanName,
+      role: roleCode,
+      staffId: staffId,
+      title: formData.title?.trim() || 'مسؤول إداري معتمد',
+      department: deptText,
+      email: formData.email?.trim() || `${staffId}@kfupm.edu.sa`,
+      phone: formData.phone?.trim() || '',
+      office: formData.office?.trim() || 'مبنى 10 - قسم الخدمات والفعاليات',
+      avatarBg: randomBg,
+      bio: formData.bio?.trim() || `المسؤول المعني بتنفيذ ومتابعة طلبات وخدمات الفعاليات الطلابية.`,
+      isCustom: true,
+    };
+
+    const nextAccounts = [newAccount, ...userAccounts.filter(u => u.id !== newUserId && u.staffId !== staffId && u.username !== newAccount.username)];
+    setUserAccounts(nextAccounts);
+    localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(nextAccounts));
+
+    // Remove from deleted list if previously existed
+    let cleanDeletedIds: string[] = [];
+    try {
+      const deletedIdsSaved = localStorage.getItem(STORAGE_KEYS.DELETED_ACCOUNTS);
+      if (deletedIdsSaved) {
+        const deletedIds: string[] = JSON.parse(deletedIdsSaved);
+        cleanDeletedIds = deletedIds.filter(id => id !== newUserId && id !== newAccount.username && id !== cleanName && id !== staffId);
+        localStorage.setItem(STORAGE_KEYS.DELETED_ACCOUNTS, JSON.stringify(cleanDeletedIds));
+      }
+    } catch (e) {}
+
+    // Notifications
+    const timestamp = new Date().toISOString();
+    const newNotifs: NotificationItem[] = [
+      {
+        id: `notif-staff-reg-${Date.now()}`,
+        title: `تسجيل موظف معني جديد: ${cleanName}`,
+        message: `تم اعتماد وتفعيل حساب الموظف ${cleanName} (${newAccount.title}) في سجل الموظفين المعنيين بإدارة النشاط.`,
+        targetRole: 'admin',
+        timestamp,
+        read: false,
+        type: 'alert',
+      },
+    ];
+
+    setNotifications(prev => [...newNotifs, ...prev]);
+    markLocalDataModified();
+
+    // Persist directly to Firestore
+    saveUserAccountDoc(newAccount).catch(e => console.warn('Firestore save staff error:', e));
+
+    // Instant cloud synchronization push
+    pushToCloudGist({
+      userAccounts: nextAccounts,
+      deletedAccountIds: cleanDeletedIds,
+    });
+
+    try {
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b']
+      });
+    } catch (e) {}
+
+    return newAccount;
+  };
+
+  // Delete Staff Member (Admin capability)
+  const deleteStaffMember = (staffUserId: string): { success: boolean; message: string } => {
+    const target = userAccounts.find(u => 
+      u.id === staffUserId || 
+      u.staffId === staffUserId || 
+      u.username === staffUserId ||
+      (u.role && u.role === staffUserId)
+    );
+
+    if (!target) {
+      return { success: false, message: 'لم يتم العثور على حساب الموظف المحدد' };
+    }
+
+    const staffName = target.name;
+    const staffId = target.staffId || target.id;
+
+    let updatedDeletedIds: string[] = [];
+    try {
+      const deletedIdsSaved = localStorage.getItem(STORAGE_KEYS.DELETED_ACCOUNTS);
+      const deletedIds: string[] = deletedIdsSaved ? JSON.parse(deletedIdsSaved) : [];
+      updatedDeletedIds = Array.from(new Set([...deletedIds, staffUserId, target.id, target.username, staffName, staffId].filter(Boolean)));
+      localStorage.setItem(STORAGE_KEYS.DELETED_ACCOUNTS, JSON.stringify(updatedDeletedIds));
+    } catch (e) {
+      console.error('Error saving deleted staff:', e);
+    }
+
+    const cleanedAccounts = userAccounts.filter(u => u.id !== staffUserId && u.id !== target.id && u.staffId !== staffId && u.username !== target.username);
+    setUserAccounts(cleanedAccounts);
+    localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(cleanedAccounts));
+
+    if (currentUser && (currentUser.id === staffUserId || currentUser.id === target.id || currentUser.staffId === staffId)) {
+      const fallbackUser = cleanedAccounts.find(u => u.role === 'admin') || cleanedAccounts[0];
+      setCurrentUser(fallbackUser);
+      if (fallbackUser) {
+        localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(fallbackUser));
+      }
+    }
+
+    deleteUserAccountDoc(staffUserId).catch(e => console.warn('Firestore delete staff error:', e));
+    if (target.id !== staffUserId) {
+      deleteUserAccountDoc(target.id).catch(e => console.warn('Firestore delete staff error:', e));
+    }
+
+    markLocalDataModified();
+
+    const timestamp = new Date().toISOString();
+    setNotifications(prev => [
+      {
+        id: `notif-staff-del-${Date.now()}`,
+        title: `حذف حساب موظف: ${staffName}`,
+        message: `تم إزالة حساب الموظف المعني ${staffName} من سجل الموظفين المعتمدين نهائياً.`,
+        targetRole: 'admin',
+        timestamp,
+        read: false,
+        type: 'alert',
+      },
+      ...prev,
+    ]);
+
+    pushToCloudGist({
+      userAccounts: cleanedAccounts,
+      deletedAccountIds: updatedDeletedIds,
+    });
+
+    return { success: true, message: `تم حذف حساب الموظف المعني (${staffName}) نهائياً` };
+  };
+
   // Delete Club Account (Admin capability)
   const deleteClubAccount = (clubUserId: string): { success: boolean; message: string } => {
     const target = userAccounts.find(u => 
@@ -1650,8 +1839,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Dynamic staff members with live profile information from userAccounts
   const staffMembers: StaffMember[] = useMemo(() => {
-    return STAFF_MEMBERS.map(staff => {
-      const staffAccount = userAccounts.find(u => u.staffId === staff.id || u.role === staff.roleCode);
+    const defaultStaff = STAFF_MEMBERS.map(staff => {
+      const staffAccount = userAccounts.find(u => u.staffId === staff.id || u.role === staff.roleCode || u.id === `user_staff_${staff.id}`);
       if (staffAccount) {
         return {
           ...staff,
@@ -1665,6 +1854,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return staff;
     });
+
+    // Custom staff members from userAccounts
+    const customStaffAccounts = userAccounts.filter(u => 
+      (u.role.startsWith('staff_') || Boolean(u.staffId)) && 
+      !defaultStaff.some(ds => ds.id === u.staffId || ds.roleCode === u.role || ds.id === u.id || `user_staff_${ds.id}` === u.id)
+    );
+
+    const customStaff: StaffMember[] = customStaffAccounts.map(acc => {
+      const rawDept = acc.department || '';
+      const depts = rawDept.split(',').map(s => s.trim()).filter(Boolean);
+      return {
+        id: acc.staffId || acc.id.replace(/^user_staff_/, ''),
+        name: acc.name,
+        shortName: acc.name.startsWith('أ.') || acc.name.startsWith('م.') || acc.name.startsWith('د.') ? acc.name : `أ. ${acc.name}`,
+        roleCode: acc.role,
+        title: acc.title || 'مسؤول إداري معتمد',
+        phone: acc.phone || '',
+        email: acc.email,
+        office: acc.office || 'مبنى 10 - قسم الخدمات',
+        avatarBg: acc.avatarBg || 'from-indigo-600 to-blue-700',
+        departmentIds: (depts as any) || [],
+        notes: acc.bio || '',
+        sharedWithStudents: true,
+      };
+    });
+
+    return [...defaultStaff, ...customStaff];
   }, [userAccounts]);
 
   const currentStaff: StaffMember | undefined = useMemo(() => {
@@ -3189,8 +3405,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         logout,
         registerNewClubPresident,
         registerNewSupervisor,
+        registerNewStaffMember,
         deleteClubAccount,
         deleteSupervisorAccount,
+        deleteStaffMember,
         updateUserProfile,
         approveRequestBySupervisor,
         rejectRequestBySupervisor,

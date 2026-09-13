@@ -233,7 +233,12 @@ export const LoginPortal: React.FC<Props> = ({ onOpenReferenceGuide }) => {
       setStaffError('يرجى إدخال كلمة المرور للمتابعة');
       return;
     }
-    const account = userAccounts.find(u => u.role === selectedStaffId);
+    const account = userAccounts.find(u => 
+      u.role === selectedStaffId || 
+      u.staffId === selectedStaffId || 
+      u.id === selectedStaffId ||
+      u.id === `user_staff_${selectedStaffId}`
+    );
     if (!account) {
       setStaffError('حساب الموظف غير متوفر');
       return;
