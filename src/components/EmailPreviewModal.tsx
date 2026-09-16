@@ -13,10 +13,17 @@ import {
   Clock, 
   Calendar,
   CheckCircle2,
-  FileText
+  FileText,
+  Info
 } from 'lucide-react';
 import { EmailNotificationLog } from '../types';
 import { useApp } from '../context/AppContext';
+import { 
+  getGmailComposeUrl, 
+  getOutlookComposeUrl, 
+  getOffice365ComposeUrl, 
+  getMailtoUrl 
+} from '../utils/emailService';
 
 interface Props {
   emailLog: EmailNotificationLog | null;
@@ -30,6 +37,7 @@ export const EmailPreviewModal: React.FC<Props> = ({ emailLog, onClose, onResend
   const [copied, setCopied] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [resendSuccess, setResendSuccess] = useState(false);
+  const [resendMsg, setResendMsg] = useState('');
 
   if (!emailLog) return null;
 
@@ -69,8 +77,18 @@ export const EmailPreviewModal: React.FC<Props> = ({ emailLog, onClose, onResend
   };
 
   const handleOpenNativeMail = () => {
-    const mailto = `mailto:${encodeURIComponent(emailLog.recipientEmail)}?subject=${encodeURIComponent(emailLog.subject)}&body=${encodeURIComponent(emailLog.bodyText)}`;
+    const mailto = getMailtoUrl(emailLog.recipientEmail, emailLog.subject, emailLog.bodyText);
     window.location.href = mailto;
+  };
+
+  const handleOpenGmail = () => {
+    const gmailUrl = getGmailComposeUrl(emailLog.recipientEmail, emailLog.subject, emailLog.bodyText);
+    window.open(gmailUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleOpenOutlook = () => {
+    const outlookUrl = getOffice365ComposeUrl(emailLog.recipientEmail, emailLog.subject, emailLog.bodyText);
+    window.open(outlookUrl, '_blank', 'noopener,noreferrer');
   };
 
   const handleResend = async () => {
@@ -79,13 +97,15 @@ export const EmailPreviewModal: React.FC<Props> = ({ emailLog, onClose, onResend
       onResend(emailLog);
       setIsResending(false);
       setResendSuccess(true);
-      setTimeout(() => setResendSuccess(false), 3000);
+      setResendMsg('تم إعادة تسجيل وتجهيز الإشعار للمشرف');
+      setTimeout(() => setResendSuccess(false), 4000);
     } else {
       const res = await resendSupervisorEmail(emailLog.requestId);
       setIsResending(false);
       if (res.success) {
         setResendSuccess(true);
-        setTimeout(() => setResendSuccess(false), 3000);
+        setResendMsg(res.message || 'تم إرسال الإشعار بنجاح');
+        setTimeout(() => setResendSuccess(false), 4000);
       } else {
         alert(res.message);
       }
@@ -94,7 +114,7 @@ export const EmailPreviewModal: React.FC<Props> = ({ emailLog, onClose, onResend
 
   return (
     <div className="fixed inset-0 z-60 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200">
-      <div className="bg-white w-full max-w-3xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+      <div className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
         
         {/* Email Header Ribbon */}
         <div className="bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 text-white p-4 sm:p-5 flex items-center justify-between border-b border-emerald-800">
@@ -126,7 +146,7 @@ export const EmailPreviewModal: React.FC<Props> = ({ emailLog, onClose, onResend
         </div>
 
         {/* Email Metadata Details Bar */}
-        <div className="p-4 bg-slate-50 border-b border-slate-200 text-xs space-y-2">
+        <div className="p-4 bg-slate-50 border-b border-slate-200 text-xs space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div className="flex items-center gap-2 text-slate-700">
               <span className="font-bold text-slate-500 min-w-16">المُرسل:</span>
@@ -153,8 +173,43 @@ export const EmailPreviewModal: React.FC<Props> = ({ emailLog, onClose, onResend
               <span className="font-bold text-slate-500 min-w-16">حالة التسليم:</span>
               <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>تم الإرسال والتسليم لخادم البريد</span>
+                <span>تم التوليد والتسليم للمنظومة</span>
               </span>
+            </div>
+          </div>
+
+          {/* Quick Direct Webmail Dispatch Info Banner */}
+          <div className="bg-emerald-50/80 border border-emerald-200 rounded-xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-emerald-950">
+            <div className="flex items-start gap-2 text-xs">
+              <Info className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold">إرسال فوري ومباشر لصندوق بريد المشرف:</span>
+                <p className="text-[11px] text-emerald-800 mt-0.5 leading-relaxed">
+                  يمكنك بضغطة زر فتح شاشة الإرسال في Gmail أو Outlook معبأة بالكامل بعنوان المشرف ونص الخطاب لإرسالها فوراً دون أي حظر أو فلترة.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+              <button
+                type="button"
+                onClick={handleOpenGmail}
+                className="px-3 py-1.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                title="فتح في Gmail مباشرة"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>إرسال عبر Gmail</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleOpenOutlook}
+                className="px-3 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                title="فتح في Outlook الجامعي / الويب"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>إرسال عبر Outlook</span>
+              </button>
             </div>
           </div>
 
@@ -181,7 +236,7 @@ export const EmailPreviewModal: React.FC<Props> = ({ emailLog, onClose, onResend
               </button>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
                 onClick={handleCopyText}
@@ -204,40 +259,28 @@ export const EmailPreviewModal: React.FC<Props> = ({ emailLog, onClose, onResend
                 type="button"
                 onClick={handleOpenNativeMail}
                 className="px-3 py-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                title="فتح في Microsoft Outlook أو تطبيق البريد"
+                title="فتح في تطبيق البريد المثبت على جهازك"
               >
                 <ExternalLink className="w-3.5 h-3.5 text-emerald-700" />
-                <span>فتح في Outlook / Mail</span>
+                <span>تطبيق البريد (Mail App)</span>
               </button>
 
-              <a
-                href="https://club-requests-and-tasks-platform.vercel.app/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3 py-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                title="الانتقال إلى رابط المنصة الرئيسي"
+              <button
+                type="button"
+                disabled={isResending}
+                onClick={handleResend}
+                className="px-3.5 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
               >
-                <ExternalLink className="w-3.5 h-3.5 text-emerald-700" />
-                <span>رابط المنصة</span>
-              </a>
-
-              {onResend && (
-                <button
-                  type="button"
-                  disabled={isResending}
-                  onClick={handleResend}
-                  className="px-3.5 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
-                >
-                  <RotateCw className={`w-3.5 h-3.5 ${isResending ? 'animate-spin' : ''}`} />
-                  <span>{isResending ? 'جاري الإرسال...' : 'إعادة الإرسال للمشرف'}</span>
-                </button>
-              )}
+                <RotateCw className={`w-3.5 h-3.5 ${isResending ? 'animate-spin' : ''}`} />
+                <span>{isResending ? 'جاري الإرسال...' : 'إعادة إرسال الإشعار'}</span>
+              </button>
             </div>
           </div>
 
           {resendSuccess && (
-            <div className="p-2 bg-emerald-100 text-emerald-900 font-bold text-xs rounded-lg text-center animate-in fade-in">
-              ✅ تم إعادة إرسال الإشعار البريدي إلى المشرف بنجاح!
+            <div className="p-2.5 bg-emerald-100 border border-emerald-300 text-emerald-900 font-bold text-xs rounded-xl text-center animate-in fade-in flex items-center justify-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-700" />
+              <span>{resendMsg || '✅ تم إعادة إرسال وتجهيز الإشعار البريدي بنجاح!'}</span>
             </div>
           )}
         </div>
@@ -260,7 +303,7 @@ export const EmailPreviewModal: React.FC<Props> = ({ emailLog, onClose, onResend
 
         {/* Footer */}
         <div className="p-3 sm:p-4 bg-white border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
-          <span>نظام الإشعارات الآلية • عمادة شؤون الطلاب - KFUPM</span>
+          <span>نظام الإشعارات الآلية المعتمدة • عمادة شؤون الطلاب - KFUPM</span>
           <button
             onClick={onClose}
             className="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors cursor-pointer"

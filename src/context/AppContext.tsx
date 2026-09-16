@@ -17,7 +17,8 @@ import {
 import { 
   buildSupervisorEmailHtml,
   buildSupervisorEmailText,
-  sendSupervisorEmailNotification
+  sendSupervisorEmailNotification,
+  sendCompletionEmailNotification,
 } from '../utils/emailService';
 import { 
   STAFF_MEMBERS, 
@@ -1042,21 +1043,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 1. Firebase Firestore Real-Time Live Sync & Initial Seeding
   useEffect(() => {
-    // Seed initial data if Firestore is fresh/empty with full current state (including custom supervisors)
+    // Seed initial data only if needed and quota permits
     seedInitialFirestoreDataIfEmpty({
       userAccounts: userAccounts.length > 0 ? userAccounts : USER_ACCOUNTS,
       requests: requests.length > 0 ? requests : INITIAL_REQUESTS,
       services: services.length > 0 ? services : AVAILABLE_SERVICES,
       notifications: notifications.length > 0 ? notifications : INITIAL_NOTIFICATIONS,
-    }).then(() => {
-      // Ensure all custom accounts (supervisors, clubs) and data are actively persisted to Firestore
-      bulkSyncStateToFirestore({
-        userAccounts,
-        requests,
-        services,
-        notifications,
-      }).catch(err => console.warn('Firestore initial bulk sync notice:', err));
-    }).catch(err => console.warn('Firestore seed check notice:', err));
+    }).catch(err => {
+      console.warn('Firestore seed check notice:', err);
+    });
 
     // Subscribe to real-time live updates across all devices
     const unsubscribeFirestore = subscribeToAllAppData({
@@ -1083,11 +1078,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const filtered = incomingUsers.filter(u => !legacyMockSupervisorIds.has(u.id));
           const existingIds = new Set(filtered.map(u => u.id));
           
-          // Also preserve any custom accounts (like newly registered supervisors/clubs) from local state and save to Firestore
+          // Preserve local custom accounts without triggering recursive write loops
           const localCustomAccounts = userAccounts.filter(u => u.isCustom && !existingIds.has(u.id));
-          localCustomAccounts.forEach(customAcc => {
-            saveUserAccountDoc(customAcc).catch(e => console.warn('Sync custom account to Firestore error:', e));
-          });
 
           const missingDefaults = USER_ACCOUNTS.filter(u => !existingIds.has(u.id) && (u.role === 'admin' || u.role.startsWith('staff_')));
           const merged = [...filtered, ...localCustomAccounts, ...missingDefaults];
@@ -3275,6 +3267,71 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
 
       updatedNotifs = [newNotifItem, ...notifications];
+
+      // If the entire request is now completed, send celebration and completion notifications + email
+      if (targetSavedRequest && targetSavedRequest.status === 'completed' && currentReq.status !== 'completed') {
+        const compNotifPresident: NotificationItem = {
+          id: `notif-comp-pres-${Date.now()}`,
+          title: `🎉 اكتملت كافة متطلبات الفعالية (${targetSavedRequest.eventTitle})`,
+          message: `تم الانتهاء من تنفيذ وتجهيز جميع الخدمات اللوجستية المطلوبة لفعالية (${targetSavedRequest.eventTitle}) بنجاح.`,
+          targetRole: 'club_president',
+          requestId: targetSavedRequest.id,
+          timestamp,
+          read: false,
+          type: 'status_change',
+        };
+
+        const compNotifSupervisor: NotificationItem = {
+          id: `notif-comp-sup-${Date.now()}`,
+          title: `✅ اكتمال تجهيز فعالية نادي ${targetSavedRequest.clubName}`,
+          message: `تم إنجاز كافة الخدمات المطلوبة لفعالية (${targetSavedRequest.eventTitle}) المقررة بتاريخ ${targetSavedRequest.eventDate}.`,
+          targetRole: 'club_supervisor',
+          requestId: targetSavedRequest.id,
+          timestamp,
+          read: false,
+          type: 'status_change',
+        };
+
+        updatedNotifs = [compNotifPresident, compNotifSupervisor, ...updatedNotifs];
+        saveNotificationDoc(compNotifPresident).catch(e => console.warn('Firestore save comp notif pres error:', e));
+        saveNotificationDoc(compNotifSupervisor).catch(e => console.warn('Firestore save comp notif sup error:', e));
+
+        // Trigger celebratory confetti
+        try {
+          confetti({
+            particleCount: 80,
+            spread: 70,
+            origin: { y: 0.6 }
+          });
+        } catch (e) {
+          // Ignore if in headless env
+        }
+
+        // Send Completion Email to President and Supervisor
+        const clubPresAccount = userAccounts.find(u => u.clubName === targetSavedRequest?.clubName && u.role === 'club_president');
+        const clubSupAccount = userAccounts.find(u => 
+          u.role === 'club_supervisor' && 
+          (u.clubName === targetSavedRequest?.clubName || u.supervisedClubNames?.includes(targetSavedRequest?.clubName || ''))
+        );
+
+        sendCompletionEmailNotification({
+          request: targetSavedRequest,
+          presidentName: clubPresAccount?.name || targetSavedRequest.presidentName || 'سعادة رئيس النادي',
+          presidentEmail: clubPresAccount?.email || targetSavedRequest.presidentEmail || 'president@kfupm.edu.sa',
+          supervisorName: clubSupAccount?.name || targetSavedRequest.supervisorName || 'سعادة المشرف الأكاديمي',
+          supervisorEmail: clubSupAccount?.email || 'alsenanwahingcar@gmail.com',
+          clubName: targetSavedRequest.clubName,
+          eventTitle: targetSavedRequest.eventTitle,
+          eventDate: targetSavedRequest.eventDate,
+          tasks: targetSavedRequest.tasks,
+          completedAt: timestamp,
+        }).then(res => {
+          if (res.logItem) {
+            setEmailLogs(prev => [res.logItem, ...prev]);
+          }
+        }).catch(err => console.warn('Completion email dispatch warning:', err));
+      }
+
       setNotifications(updatedNotifs);
       localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(updatedNotifs));
       saveNotificationDoc(newNotifItem).catch(e => console.warn('Firestore save notif error:', e));

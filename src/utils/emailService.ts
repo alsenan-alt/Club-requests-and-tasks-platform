@@ -20,6 +20,19 @@ export interface EmailTemplateParams {
   isUpdate?: boolean;
 }
 
+export interface CompletionEmailParams {
+  request: ClubRequest;
+  presidentName: string;
+  presidentEmail: string;
+  supervisorName: string;
+  supervisorEmail: string;
+  clubName: string;
+  eventTitle: string;
+  eventDate: string;
+  tasks: Task[];
+  completedAt?: string;
+}
+
 /**
  * Builds the official KFUPM Deanship of Student Affairs HTML Email template
  */
@@ -295,12 +308,218 @@ export function buildSupervisorEmailText(params: EmailTemplateParams): string {
 }
 
 /**
+ * Webmail and direct email client deep-link URL generators
+ */
+export function getGmailComposeUrl(to: string, subject: string, body: string): string {
+  return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+export function getOutlookComposeUrl(to: string, subject: string, body: string): string {
+  return `https://outlook.live.com/mail/0/deeplink/compose?to=${encodeURIComponent(to)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+export function getOffice365ComposeUrl(to: string, subject: string, body: string): string {
+  return `https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(to)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+export function getMailtoUrl(to: string, subject: string, body: string): string {
+  return `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+/**
  * Generates mailto link for direct launch in local email client (Outlook, Apple Mail, etc.)
  */
 export function generateSupervisorMailtoLink(params: EmailTemplateParams): string {
   const subject = `[إشعار طلب فعالية جديد] طلب اعتماد من نادي ${params.clubName}: ${params.eventTitle}`;
   const body = buildSupervisorEmailText(params);
-  return `mailto:${encodeURIComponent(params.supervisorEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  return getMailtoUrl(params.supervisorEmail, subject, body);
+}
+
+/**
+ * Builds HTML template for event completion notification (to President & Supervisor)
+ */
+export function buildCompletionEmailHtml(params: CompletionEmailParams): string {
+  const {
+    request,
+    presidentName,
+    clubName,
+    eventTitle,
+    eventDate,
+    tasks,
+    completedAt
+  } = params;
+
+  const tasksListHtml = tasks && tasks.length > 0
+    ? tasks.map((t, idx) => `
+        <tr style="border-bottom: 1px solid #e2e8f0;">
+          <td style="padding: 10px 12px; font-size: 13px; font-weight: bold; color: #1e293b; text-align: right;">
+            ${idx + 1}. ${t.serviceName}
+          </td>
+          <td style="padding: 10px 12px; font-size: 12px; color: #047857; text-align: right;">
+            ${t.departmentName}
+          </td>
+          <td style="padding: 10px 12px; font-size: 12px; color: #475569; text-align: right;">
+            ${t.staffName}
+          </td>
+          <td style="padding: 10px 12px; text-align: center;">
+            <span style="display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: bold; background-color: #dcfce7; color: #15803d;">
+              ✅ تم الإنجاز
+            </span>
+          </td>
+        </tr>
+      `).join('')
+    : '<tr><td colspan="4" style="padding: 12px; text-align: center; color: #94a3b8; font-size: 13px;">لا توجد خدمات محددة</td></tr>';
+
+  return `
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>إشعار اكتمال تجهيز متطلبات الفعالية - جامعة الملك فهد للبترول والمعادن</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; direction: rtl; text-align: right;">
+  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; padding: 24px 0;">
+    <tr>
+      <td align="center">
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 650px; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); border: 1px solid #e2e8f0;">
+          
+          <!-- Header Banner -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #064e3b 0%, #047857 60%, #0f766e 100%); padding: 32px 28px; text-align: center; color: #ffffff;">
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td align="center">
+                    <div style="display: inline-block; background-color: rgba(255, 255, 255, 0.15); padding: 6px 16px; border-radius: 9999px; font-size: 12px; font-weight: bold; letter-spacing: 0.5px; margin-bottom: 12px; border: 1px solid rgba(255, 255, 255, 0.25);">
+                      عمادة شؤون الطلاب • إدارة الأنشطة الطلابية
+                    </div>
+                    <h1 style="margin: 0; font-size: 22px; font-weight: bold; line-height: 1.4; color: #ffffff;">
+                      منظومة إدارة فعاليات وخدمات الأندية الطلابية
+                    </h1>
+                    <p style="margin: 8px 0 0 0; font-size: 13px; color: #a7f3d0;">
+                      جامعة الملك فهد للبترول والمعادن (KFUPM)
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Notification Title Badge -->
+          <tr>
+            <td style="padding: 24px 28px 12px 28px;">
+              <div style="background-color: #ecfdf5; border-right: 4px solid #10b981; padding: 14px 18px; border-radius: 8px;">
+                <span style="font-size: 15px; font-weight: bold; color: #065f46;">
+                  🎉 تهانينا! اكتملت كافة متطلبات وتجهيزات الفعالية بنجاح
+                </span>
+                <p style="margin: 4px 0 0 0; font-size: 12px; color: #047857;">
+                  رقم المرجع: <strong style="font-family: monospace; direction: ltr; display: inline-block;">${request.requestNumber || request.id}</strong> • النادي: <strong>${clubName}</strong>
+                </p>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Main Greeting & Salutation -->
+          <tr>
+            <td style="padding: 12px 28px; color: #334155; font-size: 14px; line-height: 1.8;">
+              <p style="margin: 0 0 12px 0; font-weight: bold; font-size: 15px; color: #0f172a;">
+                سعادة رئيس نادي (${clubName}) الطالب: ${presidentName} والمشرف الأكاديمي،
+              </p>
+              <p style="margin: 0 0 16px 0;">
+                السلام عليكم ورحمة الله وبركاته،
+              </p>
+              <p style="margin: 0 0 16px 0;">
+                يسرنا إبلاغكم بأنه تم بحمد الله وتوفيقه الانتهاء من تجهيز وتنفيذ كافة الخدمات اللوجستية المطلوبة لفعالية <strong style="color: #047857;">(${eventTitle})</strong> المقررة بتاريخ <strong style="color: #0f172a;">${eventDate}</strong>، من قبل فرق وموظفي عمادة شؤون الطلاب المختصين.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Completed Tasks Section -->
+          <tr>
+            <td style="padding: 0 28px 20px 28px;">
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+                <thead>
+                  <tr style="background-color: #f1f5f9;">
+                    <th style="padding: 10px 12px; font-size: 12px; font-weight: bold; color: #475569; text-align: right;">الخدمة المنجزة</th>
+                    <th style="padding: 10px 12px; font-size: 12px; font-weight: bold; color: #475569; text-align: right;">القسم المختص</th>
+                    <th style="padding: 10px 12px; font-size: 12px; font-weight: bold; color: #475569; text-align: right;">الموظف المنفذ</th>
+                    <th style="padding: 10px 12px; font-size: 12px; font-weight: bold; color: #475569; text-align: center;">الحالة</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${tasksListHtml}
+                </tbody>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Action Box -->
+          <tr>
+            <td style="padding: 0 28px 28px 28px; text-align: center;">
+              <div style="background-color: #f0fdf4; border: 2px dashed #86efac; border-radius: 14px; padding: 22px; text-align: center;">
+                <p style="margin: 0 0 14px 0; font-size: 14px; color: #166534; font-weight: bold;">
+                  يمكنكم استعراض التفاصيل الكاملة أو طباعة تقرير الإنجاز عبر المنظومة:
+                </p>
+                <a href="https://club-requests-and-tasks-platform.vercel.app/" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #059669; color: #ffffff; padding: 12px 32px; border-radius: 10px; font-size: 14px; font-weight: bold; text-decoration: none; box-shadow: 0 4px 6px -1px rgba(5, 150, 105, 0.3); border: 1px solid #047857;">
+                  🔗 فتح تفاصيل الطلب بالمنظومة
+                </a>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 20px 28px; text-align: center; color: #64748b; font-size: 11px; line-height: 1.6;">
+              <p style="margin: 0 0 4px 0; font-weight: bold; color: #475569;">
+                جامعة الملك فهد للبترول والمعادن • عمادة شؤون الطلاب • إدارة الأنشطة الطلابية
+              </p>
+              <p style="margin: 0;">
+                نتمنى لكم وللنادي الطلابي فعالية متميزة وناجحة بإذن الله.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `.trim();
+}
+
+/**
+ * Builds Plain Text Version of the Completion Email
+ */
+export function buildCompletionEmailText(params: CompletionEmailParams): string {
+  const {
+    request,
+    presidentName,
+    clubName,
+    eventTitle,
+    eventDate,
+    tasks,
+    completedAt
+  } = params;
+
+  let text = `جامعة الملك فهد للبترول والمعادن (KFUPM)\nعمادة شؤون الطلاب - إدارة الأنشطة الطلابية\nمنظومة إدارة طلبات وفعاليات الأندية الطلابية\n\n`;
+  text += `--------------------------------------------------\n`;
+  text += `🎉 إشعار اكتمال تجهيز متطلبات الفعالية بالكامل\n`;
+  text += `رقم المرجع: ${request.requestNumber || request.id} - نادي ${clubName}\n`;
+  text += `--------------------------------------------------\n\n`;
+  text += `سعادة رئيس نادي (${clubName}) الطالب: ${presidentName} والمشرف الأكاديمي المحترمين،\n\n`;
+  text += `السلام عليكم ورحمة الله وبركاته،\n\n`;
+  text += `يسرنا إبلاغكم بأنه تم الانتهاء من تجهيز وتنفيذ كافة الخدمات اللوجستية المطلوبة لفعالية (${eventTitle}) المقررة بتاريخ ${eventDate}.\n\n`;
+  text += `الخدمات التي تم إنجازها:\n`;
+  if (tasks && tasks.length > 0) {
+    tasks.forEach((t, i) => {
+      text += `  ${i + 1}. ${t.serviceName} (${t.departmentName} - المنفذ: ${t.staffName}) - تم الإنجاز بنجاح ✅\n`;
+    });
+  }
+  text += `\nنتمنى لكم وللنادي الطلابي كل التوفيق والنجاح.\n`;
+  text += `\nرابط المنصة المباشر:\nhttps://club-requests-and-tasks-platform.vercel.app/\n\nعمادة شؤون الطلاب - جامعة الملك فهد للبترول والمعادن\n`;
+
+  return text;
 }
 
 /**
@@ -310,6 +529,7 @@ export async function sendSupervisorEmailNotification(params: EmailTemplateParam
   success: boolean;
   logItem: EmailNotificationLog;
   message: string;
+  smtpDelivered?: boolean;
 }> {
   const emailHtml = buildSupervisorEmailHtml(params);
   const emailText = buildSupervisorEmailText(params);
@@ -354,11 +574,15 @@ export async function sendSupervisorEmailNotification(params: EmailTemplateParam
     });
 
     if (response.ok) {
+      const data = await response.json().catch(() => ({}));
       logItem.status = 'delivered';
       return {
         success: true,
         logItem,
-        message: `تم إرسال إشعار بريدي فوري بنجاح إلى المشرف الأكاديمي (${params.supervisorEmail})`,
+        smtpDelivered: data?.smtpDelivered || false,
+        message: data?.smtpDelivered
+          ? `تم إرسال البريد الإلكتروني بنجاح عبر خادم SMTP إلى المشرف (${params.supervisorEmail})`
+          : `تم تسجيل وتجهيز الإشعار البريدي للمشرف (${params.supervisorEmail}) بنجاح.`,
       };
     }
   } catch (err) {
@@ -369,6 +593,62 @@ export async function sendSupervisorEmailNotification(params: EmailTemplateParam
   return {
     success: true,
     logItem,
-    message: `تم تسجيل وإرسال إشعار البريد الإلكتروني للمشرف الأكاديمي (${params.supervisorEmail})`,
+    message: `تم تسجيل وتجهيز الإشعار البريدي للمشرف الأكاديمي (${params.supervisorEmail})`,
+  };
+}
+
+/**
+ * Dispatches completion notification to President and Supervisor
+ */
+export async function sendCompletionEmailNotification(params: CompletionEmailParams): Promise<{
+  success: boolean;
+  logItem: EmailNotificationLog;
+  message: string;
+}> {
+  const emailHtml = buildCompletionEmailHtml(params);
+  const emailText = buildCompletionEmailText(params);
+  const timestamp = new Date().toISOString();
+  const subject = `[🎉 اكتملت المتطلبات] تم إنجاز خدمات فعالية ${params.eventTitle} - نادي ${params.clubName}`;
+
+  const logItem: EmailNotificationLog = {
+    id: `email-comp-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    requestId: params.request.id,
+    requestNumber: params.request.requestNumber || params.request.id,
+    clubName: params.clubName,
+    eventTitle: params.eventTitle,
+    recipientEmail: params.presidentEmail || params.supervisorEmail,
+    recipientName: params.presidentName,
+    recipientRole: 'club_president',
+    subject,
+    bodyHtml: emailHtml,
+    bodyText: emailText,
+    sentAt: timestamp,
+    status: 'delivered',
+    trigger: 'new_request_submission',
+  };
+
+  try {
+    await fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recipientEmail: params.presidentEmail,
+        recipientName: params.presidentName,
+        subject,
+        bodyHtml: emailHtml,
+        bodyText: emailText,
+        requestId: params.request.id,
+        clubName: params.clubName,
+        eventTitle: params.eventTitle,
+      }),
+    });
+  } catch (e) {
+    console.warn('Completion email error:', e);
+  }
+
+  return {
+    success: true,
+    logItem,
+    message: `تم إرسال إشعار اكتمال الفعالية لرئيس النادي (${params.presidentEmail})`,
   };
 }

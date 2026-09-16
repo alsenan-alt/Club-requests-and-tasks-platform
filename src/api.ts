@@ -23,6 +23,55 @@ export const COLLECTIONS = {
   APP_CONFIG: 'appConfig',
 } as const;
 
+// Global Quota Tracking
+let isQuotaExceededState = false;
+const QUOTA_STORAGE_KEY = 'kfupm_firestore_quota_exceeded';
+
+export function isFirestoreQuotaExhausted(): boolean {
+  if (isQuotaExceededState) return true;
+  try {
+    const cached = localStorage.getItem(QUOTA_STORAGE_KEY);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      // Reset if older than 12 hours
+      if (Date.now() - parsed.timestamp < 12 * 60 * 60 * 1000) {
+        isQuotaExceededState = true;
+        return true;
+      } else {
+        localStorage.removeItem(QUOTA_STORAGE_KEY);
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+  return false;
+}
+
+export function markFirestoreQuotaExceeded(reason?: string) {
+  isQuotaExceededState = true;
+  try {
+    localStorage.setItem(
+      QUOTA_STORAGE_KEY,
+      JSON.stringify({ timestamp: Date.now(), reason: reason || 'Quota limit exceeded' })
+    );
+  } catch (e) {
+    // ignore
+  }
+}
+
+export function isQuotaError(err: any): boolean {
+  if (!err) return false;
+  const msg = typeof err === 'string' ? err : err.message || '';
+  const code = err.code || '';
+  return (
+    code === 'resource-exhausted' ||
+    msg.includes('resource-exhausted') ||
+    msg.includes('Quota limit exceeded') ||
+    msg.includes('Quota exceeded') ||
+    msg.includes('Free daily write units')
+  );
+}
+
 // ==========================================
 // 1. Initial Seeding Function (Seed If Empty)
 // ==========================================
@@ -31,7 +80,11 @@ export async function seedInitialFirestoreDataIfEmpty(seedData: {
   requests: ClubRequest[];
   services: ServiceItem[];
   notifications: NotificationItem[];
-}): Promise<{ seeded: boolean; error?: string }> {
+}): Promise<{ seeded: boolean; error?: string; quotaExceeded?: boolean }> {
+  if (isFirestoreQuotaExhausted()) {
+    return { seeded: false, quotaExceeded: true };
+  }
+
   try {
     const usersSnapshot = await getDocs(collection(db, COLLECTIONS.USERS));
     if (!usersSnapshot.empty) {
@@ -78,6 +131,11 @@ export async function seedInitialFirestoreDataIfEmpty(seedData: {
     console.log('✅ Firestore initial seed completed successfully.');
     return { seeded: true };
   } catch (err: any) {
+    if (isQuotaError(err)) {
+      markFirestoreQuotaExceeded(err?.message);
+      console.warn('ℹ️ Firestore free tier write quota reached. App safely switched to local/cloud storage.');
+      return { seeded: false, quotaExceeded: true, error: 'Quota limit exceeded' };
+    }
     console.error('Error seeding initial Firestore data:', err);
     return { seeded: false, error: err?.message || 'Failed to seed initial data' };
   }
@@ -127,7 +185,11 @@ export function subscribeToAllAppData(listeners: AppDataListeners): Unsubscribe 
           listeners.onUsersChange?.(users);
         },
         (err) => {
-          console.warn('Firestore userAccounts listener error:', err);
+          if (isQuotaError(err)) {
+            markFirestoreQuotaExceeded(err.message);
+          } else {
+            console.warn('Firestore userAccounts listener error:', err);
+          }
           listeners.onError?.(err);
         }
       );
@@ -149,7 +211,11 @@ export function subscribeToAllAppData(listeners: AppDataListeners): Unsubscribe 
           listeners.onRequestsChange?.(requests);
         },
         (err) => {
-          console.warn('Firestore requests listener error:', err);
+          if (isQuotaError(err)) {
+            markFirestoreQuotaExceeded(err.message);
+          } else {
+            console.warn('Firestore requests listener error:', err);
+          }
           listeners.onError?.(err);
         }
       );
@@ -169,7 +235,11 @@ export function subscribeToAllAppData(listeners: AppDataListeners): Unsubscribe 
           listeners.onServicesChange?.(services);
         },
         (err) => {
-          console.warn('Firestore services listener error:', err);
+          if (isQuotaError(err)) {
+            markFirestoreQuotaExceeded(err.message);
+          } else {
+            console.warn('Firestore services listener error:', err);
+          }
           listeners.onError?.(err);
         }
       );
@@ -190,14 +260,22 @@ export function subscribeToAllAppData(listeners: AppDataListeners): Unsubscribe 
           listeners.onNotificationsChange?.(notifications);
         },
         (err) => {
-          console.warn('Firestore notifications listener error:', err);
+          if (isQuotaError(err)) {
+            markFirestoreQuotaExceeded(err.message);
+          } else {
+            console.warn('Firestore notifications listener error:', err);
+          }
           listeners.onError?.(err);
         }
       );
       unsubs.push(unsubNotifs);
     }
   } catch (err: any) {
-    console.error('Error attaching Firestore listeners:', err);
+    if (isQuotaError(err)) {
+      markFirestoreQuotaExceeded(err.message);
+    } else {
+      console.error('Error attaching Firestore listeners:', err);
+    }
     listeners.onError?.(err);
   }
 
@@ -216,24 +294,38 @@ export function subscribeToAllAppData(listeners: AppDataListeners): Unsubscribe 
 // ==========================================
 // 3. User Accounts CRUD Operations
 // ==========================================
-export async function saveUserAccountDoc(user: UserAccount): Promise<{ success: boolean; error?: string }> {
+export async function saveUserAccountDoc(user: UserAccount): Promise<{ success: boolean; error?: string; quotaExceeded?: boolean }> {
+  if (isFirestoreQuotaExhausted()) {
+    return { success: false, quotaExceeded: true };
+  }
   try {
     const userRef = doc(db, COLLECTIONS.USERS, user.id);
     await setDoc(userRef, sanitizeForFirestore(user), { merge: true });
     return { success: true };
   } catch (err: any) {
-    console.error(`Error saving user ${user.id} to Firestore:`, err);
+    if (isQuotaError(err)) {
+      markFirestoreQuotaExceeded(err.message);
+      return { success: false, quotaExceeded: true, error: 'Quota limit exceeded' };
+    }
+    console.warn(`Firestore save user notice for ${user.id}:`, err?.message);
     return { success: false, error: err?.message };
   }
 }
 
-export async function deleteUserAccountDoc(userId: string): Promise<{ success: boolean; error?: string }> {
+export async function deleteUserAccountDoc(userId: string): Promise<{ success: boolean; error?: string; quotaExceeded?: boolean }> {
+  if (isFirestoreQuotaExhausted()) {
+    return { success: false, quotaExceeded: true };
+  }
   try {
     const userRef = doc(db, COLLECTIONS.USERS, userId);
     await deleteDoc(userRef);
     return { success: true };
   } catch (err: any) {
-    console.error(`Error deleting user ${userId} from Firestore:`, err);
+    if (isQuotaError(err)) {
+      markFirestoreQuotaExceeded(err.message);
+      return { success: false, quotaExceeded: true, error: 'Quota limit exceeded' };
+    }
+    console.warn(`Firestore delete user notice for ${userId}:`, err?.message);
     return { success: false, error: err?.message };
   }
 }
@@ -241,24 +333,38 @@ export async function deleteUserAccountDoc(userId: string): Promise<{ success: b
 // ==========================================
 // 4. Requests CRUD Operations
 // ==========================================
-export async function saveRequestDoc(request: ClubRequest): Promise<{ success: boolean; error?: string }> {
+export async function saveRequestDoc(request: ClubRequest): Promise<{ success: boolean; error?: string; quotaExceeded?: boolean }> {
+  if (isFirestoreQuotaExhausted()) {
+    return { success: false, quotaExceeded: true };
+  }
   try {
     const reqRef = doc(db, COLLECTIONS.REQUESTS, request.id);
     await setDoc(reqRef, sanitizeForFirestore(request), { merge: true });
     return { success: true };
   } catch (err: any) {
-    console.error(`Error saving request ${request.id} to Firestore:`, err);
+    if (isQuotaError(err)) {
+      markFirestoreQuotaExceeded(err.message);
+      return { success: false, quotaExceeded: true, error: 'Quota limit exceeded' };
+    }
+    console.warn(`Firestore save request notice for ${request.id}:`, err?.message);
     return { success: false, error: err?.message };
   }
 }
 
-export async function deleteRequestDoc(requestId: string): Promise<{ success: boolean; error?: string }> {
+export async function deleteRequestDoc(requestId: string): Promise<{ success: boolean; error?: string; quotaExceeded?: boolean }> {
+  if (isFirestoreQuotaExhausted()) {
+    return { success: false, quotaExceeded: true };
+  }
   try {
     const reqRef = doc(db, COLLECTIONS.REQUESTS, requestId);
     await deleteDoc(reqRef);
     return { success: true };
   } catch (err: any) {
-    console.error(`Error deleting request ${requestId} from Firestore:`, err);
+    if (isQuotaError(err)) {
+      markFirestoreQuotaExceeded(err.message);
+      return { success: false, quotaExceeded: true, error: 'Quota limit exceeded' };
+    }
+    console.warn(`Firestore delete request notice for ${requestId}:`, err?.message);
     return { success: false, error: err?.message };
   }
 }
@@ -266,24 +372,38 @@ export async function deleteRequestDoc(requestId: string): Promise<{ success: bo
 // ==========================================
 // 5. Services CRUD Operations
 // ==========================================
-export async function saveServiceDoc(service: ServiceItem): Promise<{ success: boolean; error?: string }> {
+export async function saveServiceDoc(service: ServiceItem): Promise<{ success: boolean; error?: string; quotaExceeded?: boolean }> {
+  if (isFirestoreQuotaExhausted()) {
+    return { success: false, quotaExceeded: true };
+  }
   try {
     const srvRef = doc(db, COLLECTIONS.SERVICES, service.id);
     await setDoc(srvRef, sanitizeForFirestore(service), { merge: true });
     return { success: true };
   } catch (err: any) {
-    console.error(`Error saving service ${service.id} to Firestore:`, err);
+    if (isQuotaError(err)) {
+      markFirestoreQuotaExceeded(err.message);
+      return { success: false, quotaExceeded: true, error: 'Quota limit exceeded' };
+    }
+    console.warn(`Firestore save service notice for ${service.id}:`, err?.message);
     return { success: false, error: err?.message };
   }
 }
 
-export async function deleteServiceDoc(serviceId: string): Promise<{ success: boolean; error?: string }> {
+export async function deleteServiceDoc(serviceId: string): Promise<{ success: boolean; error?: string; quotaExceeded?: boolean }> {
+  if (isFirestoreQuotaExhausted()) {
+    return { success: false, quotaExceeded: true };
+  }
   try {
     const srvRef = doc(db, COLLECTIONS.SERVICES, serviceId);
     await deleteDoc(srvRef);
     return { success: true };
   } catch (err: any) {
-    console.error(`Error deleting service ${serviceId} from Firestore:`, err);
+    if (isQuotaError(err)) {
+      markFirestoreQuotaExceeded(err.message);
+      return { success: false, quotaExceeded: true, error: 'Quota limit exceeded' };
+    }
+    console.warn(`Firestore delete service notice for ${serviceId}:`, err?.message);
     return { success: false, error: err?.message };
   }
 }
@@ -291,24 +411,38 @@ export async function deleteServiceDoc(serviceId: string): Promise<{ success: bo
 // ==========================================
 // 6. Notifications CRUD Operations
 // ==========================================
-export async function saveNotificationDoc(notif: NotificationItem): Promise<{ success: boolean; error?: string }> {
+export async function saveNotificationDoc(notif: NotificationItem): Promise<{ success: boolean; error?: string; quotaExceeded?: boolean }> {
+  if (isFirestoreQuotaExhausted()) {
+    return { success: false, quotaExceeded: true };
+  }
   try {
     const notifRef = doc(db, COLLECTIONS.NOTIFICATIONS, notif.id);
     await setDoc(notifRef, sanitizeForFirestore(notif), { merge: true });
     return { success: true };
   } catch (err: any) {
-    console.error(`Error saving notification ${notif.id} to Firestore:`, err);
+    if (isQuotaError(err)) {
+      markFirestoreQuotaExceeded(err.message);
+      return { success: false, quotaExceeded: true, error: 'Quota limit exceeded' };
+    }
+    console.warn(`Firestore save notification notice for ${notif.id}:`, err?.message);
     return { success: false, error: err?.message };
   }
 }
 
-export async function deleteNotificationDoc(notifId: string): Promise<{ success: boolean; error?: string }> {
+export async function deleteNotificationDoc(notifId: string): Promise<{ success: boolean; error?: string; quotaExceeded?: boolean }> {
+  if (isFirestoreQuotaExhausted()) {
+    return { success: false, quotaExceeded: true };
+  }
   try {
     const notifRef = doc(db, COLLECTIONS.NOTIFICATIONS, notifId);
     await deleteDoc(notifRef);
     return { success: true };
   } catch (err: any) {
-    console.error(`Error deleting notification ${notifId} from Firestore:`, err);
+    if (isQuotaError(err)) {
+      markFirestoreQuotaExceeded(err.message);
+      return { success: false, quotaExceeded: true, error: 'Quota limit exceeded' };
+    }
+    console.warn(`Firestore delete notification notice for ${notifId}:`, err?.message);
     return { success: false, error: err?.message };
   }
 }
@@ -321,7 +455,11 @@ export async function bulkSyncStateToFirestore(state: {
   requests?: ClubRequest[];
   services?: ServiceItem[];
   notifications?: NotificationItem[];
-}): Promise<{ success: boolean; error?: string }> {
+}): Promise<{ success: boolean; error?: string; quotaExceeded?: boolean }> {
+  if (isFirestoreQuotaExhausted()) {
+    return { success: false, quotaExceeded: true };
+  }
+
   try {
     const batch = writeBatch(db);
 
@@ -352,7 +490,12 @@ export async function bulkSyncStateToFirestore(state: {
     await batch.commit();
     return { success: true };
   } catch (err: any) {
-    console.error('Error in bulkSyncStateToFirestore:', err);
+    if (isQuotaError(err)) {
+      markFirestoreQuotaExceeded(err.message);
+      return { success: false, quotaExceeded: true, error: 'Quota limit exceeded' };
+    }
+    console.warn('Firestore bulk sync notice:', err?.message);
     return { success: false, error: err?.message };
   }
 }
+
