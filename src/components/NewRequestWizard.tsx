@@ -204,6 +204,44 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
     }
   };
 
+  const handleOpenDesktopMail = (overrideRequest?: ClubRequest) => {
+    const target = overrideRequest || submittedRequest;
+    if (!target) return;
+    const sEmail = target.supervisorEmail || 'club.supervisor@kfupm.edu.sa';
+    const sName = target.supervisorName || 'المشرف الأكاديمي';
+    const sSubject = `[إشعار طلب فعالية جديد] طلب اعتماد من نادي ${target.clubName}: ${target.eventTitle}`;
+    const sBody = buildSupervisorEmailText({
+      request: target,
+      supervisorName: sName,
+      supervisorEmail: sEmail,
+      presidentName: target.presidentName,
+      presidentPhone: target.presidentPhone,
+      presidentEmail: target.presidentEmail,
+      clubName: target.clubName,
+      eventTitle: target.eventTitle,
+      eventDate: target.eventDate,
+      startTime: target.startTime,
+      endTime: target.endTime,
+      locationSummary: target.locationSummary,
+      expectedAttendees: target.expectedAttendees,
+      description: target.description,
+      budget: target.budget,
+      tasks: target.tasks,
+      isUpdate: false,
+    });
+
+    const mailto = getMailtoUrl(sEmail, sSubject, sBody);
+    
+    // Trigger default desktop/mobile Mail App
+    try {
+      const a = document.createElement('a');
+      a.href = mailto;
+      a.click();
+    } catch {
+      window.location.href = mailto;
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.eventTitle.trim()) {
@@ -222,6 +260,11 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
 
     setSubmittedRequest(created);
     setCurrentStep(5);
+
+    // Automatically trigger Mail App (mailto) upon request completion
+    setTimeout(() => {
+      handleOpenDesktopMail(created);
+    }, 400);
   };
 
   const supervisorEmail = submittedRequest?.supervisorEmail || 'club.supervisor@kfupm.edu.sa';
@@ -281,11 +324,6 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
   const handleOpenOutlookLive = () => {
     const url = getOutlookComposeUrl(supervisorEmail, emailSubject, emailBody);
     window.open(url, '_blank', 'noopener,noreferrer');
-  };
-
-  const handleOpenDesktopMail = () => {
-    const mailto = getMailtoUrl(supervisorEmail, emailSubject, emailBody);
-    window.location.href = mailto;
   };
 
   const handleOpenGmail = () => {
@@ -1232,52 +1270,55 @@ export const NewRequestWizard: React.FC<Props> = ({ isOpen, onClose }) => {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     
-                    {/* Primary Button: Outlook Office 365 */}
+                    {/* Primary Button: Mail App / Desktop Email */}
+                    <button
+                      type="button"
+                      id="btn-open-desktop-mail"
+                      onClick={() => handleOpenDesktopMail()}
+                      className="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-800 via-teal-900 to-slate-900 hover:from-emerald-700 hover:to-slate-800 text-white font-bold text-xs shadow-md hover:shadow-lg transition-all flex items-center justify-between gap-3 cursor-pointer group border border-emerald-500/30"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-300 flex items-center justify-center shrink-0 border border-emerald-400/30 group-hover:scale-105 transition-transform">
+                          <Mail className="w-5 h-5" />
+                        </div>
+                        <div className="text-right">
+                          <div className="font-extrabold font-['Tajawal',sans-serif] text-emerald-100 flex items-center gap-1.5">
+                            <span>تطبيق البريد (Mail App)</span>
+                            <span className="text-[10px] bg-emerald-500/30 text-emerald-200 px-2 py-0.5 rounded-full font-normal border border-emerald-400/20">
+                              يفتح تلقائياً ⚡
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-emerald-200/80 font-normal mt-0.5">
+                            يفتح مباشرة في تطبيق البريد المثبت بجهازك
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-[11px] bg-emerald-500/30 text-emerald-100 px-2.5 py-1 rounded-lg border border-emerald-400/30 shrink-0">
+                        فتح الآن ➔
+                      </span>
+                    </button>
+
+                    {/* Secondary Button: Outlook Office 365 */}
                     <button
                       type="button"
                       id="btn-open-outlook-office365"
                       onClick={handleOpenOutlookOffice365}
-                      className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-700 via-blue-800 to-indigo-900 hover:from-blue-800 hover:to-indigo-950 text-white font-bold text-xs shadow-sm hover:shadow-md transition-all flex items-center justify-between gap-3 cursor-pointer group"
+                      className="p-3.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm hover:shadow-md transition-all flex items-center justify-between gap-3 cursor-pointer group border border-slate-700"
                     >
                       <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
-                          <ExternalLink className="w-4 h-4 text-blue-200" />
+                        <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                          <ExternalLink className="w-4 h-4 text-blue-300" />
                         </div>
                         <div className="text-right">
                           <div className="font-extrabold font-['Tajawal',sans-serif]">
-                            فتح في Outlook الجامعي (Office 365)
-                          </div>
-                          <div className="text-[10px] text-blue-200 font-normal">
-                            فتح في صفحة البريد الجامعي الرسمي
-                          </div>
-                        </div>
-                      </div>
-                      <span className="text-[11px] bg-blue-500/40 text-blue-100 px-2 py-0.5 rounded-lg">
-                        فتح ➔
-                      </span>
-                    </button>
-
-                    {/* Secondary Button: Desktop Mail / Outlook App */}
-                    <button
-                      type="button"
-                      id="btn-open-desktop-mail"
-                      onClick={handleOpenDesktopMail}
-                      className="p-3.5 rounded-2xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs shadow-sm transition-all flex items-center justify-between gap-3 cursor-pointer group"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
-                          <Mail className="w-4 h-4 text-slate-200" />
-                        </div>
-                        <div className="text-right">
-                          <div className="font-extrabold font-['Tajawal',sans-serif]">
-                            تطبيق البريد / Outlook المكتبي
+                            Outlook الجامعي (Office 365)
                           </div>
                           <div className="text-[10px] text-slate-300 font-normal">
-                            فتح في تطبيق البريد المثبت بجهازك
+                            فتح في صفحة الويب للبريد الجامعي
                           </div>
                         </div>
                       </div>
-                      <span className="text-[11px] bg-white/10 text-slate-200 px-2 py-0.5 rounded-lg">
+                      <span className="text-[11px] bg-blue-500/30 text-blue-200 px-2 py-0.5 rounded-lg border border-blue-400/30">
                         فتح ➔
                       </span>
                     </button>
