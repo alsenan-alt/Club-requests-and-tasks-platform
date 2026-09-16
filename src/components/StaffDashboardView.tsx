@@ -31,7 +31,7 @@ import {
   ExternalLink,
   Link2
 } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { useApp, isTaskAssignedToStaff } from '../context/AppContext';
 import { DEPARTMENTS } from '../data/initialData';
 import { Task, TaskStatus, StaffMember, ClubRequest } from '../types';
 import { StaffServicesCatalogManager } from './StaffServicesCatalogManager';
@@ -52,6 +52,7 @@ export const StaffDashboardView: React.FC<Props> = ({ staff: propStaff, onOpenRe
     deleteTask,
     deleteRequest,
     currentStaff,
+    currentUser,
     userAccounts
   } = useApp();
 
@@ -70,8 +71,9 @@ export const StaffDashboardView: React.FC<Props> = ({ staff: propStaff, onOpenRe
   // Extract all tasks belonging to this staff member
   const allStaffTasks: { task: Task; request: any }[] = [];
   requests.forEach(req => {
+    if (req.status === 'pending_supervisor' && req.supervisorStatus !== 'approved') return;
     req.tasks.forEach(task => {
-      if (task.staffId === staff.id) {
+      if (isTaskAssignedToStaff(task, staff, currentUser)) {
         allStaffTasks.push({ task, request: req });
       }
     });

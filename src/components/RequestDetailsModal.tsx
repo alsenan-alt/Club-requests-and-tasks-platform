@@ -20,7 +20,7 @@ import {
   Trash2,
   Edit3
 } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { useApp, isTaskAssignedToStaff } from '../context/AppContext';
 import { STAFF_MEMBERS, DEPARTMENTS } from '../data/initialData';
 import { Task, TaskStatus } from '../types';
 import { TaskRequirementsViewer } from './TaskRequirementsViewer';
@@ -36,6 +36,7 @@ export const RequestDetailsModal: React.FC<Props> = ({ requestId, onClose }) => 
     requests, 
     currentRole, 
     currentStaff, 
+    currentUser,
     updateTaskStatus, 
     addTaskComment,
     deleteTask,
@@ -399,7 +400,7 @@ export const RequestDetailsModal: React.FC<Props> = ({ requestId, onClose }) => 
                   {request.tasks.map(task => {
                     const staff = staffMembers.find(s => s.id === task.staffId) || STAFF_MEMBERS.find(s => s.id === task.staffId);
                     const dept = DEPARTMENTS[task.departmentId];
-                    const isAssignee = currentStaff?.id === task.staffId;
+                    const isAssignee = isTaskAssignedToStaff(task, currentStaff, currentUser);
 
                     return (
                       <div

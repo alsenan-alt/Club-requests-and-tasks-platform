@@ -9,6 +9,65 @@ const GIST_FILENAME = process.env.GITHUB_GIST_FILENAME || 'Club requests and tas
 const RAW_URL = `https://gist.githubusercontent.com/alsenan-alt/${GIST_ID}/raw/${encodeURIComponent(GIST_FILENAME)}`;
 const LOCAL_DB_FILE = path.join(process.cwd(), 'data_platform_db.json');
 
+function mergeRequestsSafely(localList: any[], incomingList: any[]): any[] {
+  if (!incomingList || !Array.isArray(incomingList) || incomingList.length === 0) return localList || [];
+  if (!localList || !Array.isArray(localList) || localList.length === 0) return incomingList || [];
+
+  const localMap = new Map<string, any>();
+  localList.forEach(r => { if (r && r.id) localMap.set(r.id, r); });
+
+  const incomingMap = new Map<string, any>();
+  incomingList.forEach(r => { if (r && r.id) incomingMap.set(r.id, r); });
+
+  const allIds = Array.from(new Set([...localMap.keys(), ...incomingMap.keys()]));
+  const merged: any[] = [];
+
+  for (const id of allIds) {
+    const local = localMap.get(id);
+    const incoming = incomingMap.get(id);
+
+    if (local && !incoming) {
+      merged.push(local);
+    } else if (!local && incoming) {
+      merged.push(incoming);
+    } else if (local && incoming) {
+      const localUpdated = new Date(local.updatedAt || local.createdAt || 0).getTime();
+      const incomingUpdated = new Date(incoming.updatedAt || incoming.createdAt || 0).getTime();
+
+      const localIsApproved = local.supervisorStatus === 'approved' || local.status === 'submitted' || local.status === 'in_progress' || local.status === 'completed';
+      const incomingIsApproved = incoming.supervisorStatus === 'approved' || incoming.status === 'submitted' || incoming.status === 'in_progress' || incoming.status === 'completed';
+
+      if (localUpdated > incomingUpdated + 500) {
+        merged.push(local);
+      } else if (incomingUpdated > localUpdated + 500) {
+        if (localIsApproved && !incomingIsApproved) {
+          merged.push({
+            ...incoming,
+            status: incoming.status === 'pending_supervisor' ? 'submitted' : incoming.status,
+            supervisorStatus: 'approved',
+            supervisorApprovalDate: local.supervisorApprovalDate || incoming.supervisorApprovalDate || new Date().toISOString(),
+            supervisorNotes: local.supervisorNotes || incoming.supervisorNotes,
+            updatedAt: local.updatedAt || incoming.updatedAt,
+          });
+        } else {
+          merged.push(incoming);
+        }
+      } else {
+        if (localIsApproved && !incomingIsApproved) {
+          merged.push(local);
+        } else if (!localIsApproved && incomingIsApproved) {
+          merged.push(incoming);
+        } else {
+          merged.push(localUpdated >= incomingUpdated ? local : incoming);
+        }
+      }
+    }
+  }
+
+  merged.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+  return merged;
+}
+
 function sanitizeDatabasePayload(payload: any) {
   if (!payload || typeof payload !== 'object') return payload;
 
@@ -178,8 +237,13 @@ async function startServer() {
               const parsed = sanitizeDatabasePayload(JSON.parse(fileObj.content));
               const cloudTime = parsed.lastUpdated ? new Date(parsed.lastUpdated).getTime() : 0;
               
-              // If in-memory is newer than cloud, prefer in-memory and update Gist
-              if (inMemoryLatestData && inMemoryLatestTimestamp > cloudTime + 500) {
+              if (inMemoryLatestData) {
+                // Smart merge of requests and accounts
+                parsed.requests = mergeRequestsSafely(inMemoryLatestData.requests || [], parsed.requests || []);
+              }
+
+              // If in-memory timestamp is strictly newer than cloud, prefer in-memory and update Gist
+              if (inMemoryLatestData && inMemoryLatestTimestamp > cloudTime + 1000) {
                 return res.json({
                   success: true,
                   source: 'server_cache',

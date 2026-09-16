@@ -1479,11 +1479,43 @@ export function translateDepartmentData(
 }
 
 export function translateFieldLabel(fieldIdOrLabel: string, language: Language, fallback?: string): string {
-  const entry = DYNAMIC_DATA_DICTIONARY[fieldIdOrLabel] || (fallback ? DYNAMIC_DATA_DICTIONARY[fallback] : undefined);
-  if (entry && entry[language]) {
-    return entry[language];
+  if (!fieldIdOrLabel && !fallback) return '';
+  
+  // 1. Direct dictionary match by fieldId or fallback
+  const directMatch = DYNAMIC_DATA_DICTIONARY[fieldIdOrLabel] || 
+                      (fallback ? DYNAMIC_DATA_DICTIONARY[fallback] : undefined) ||
+                      TRANSLATIONS[fieldIdOrLabel] || 
+                      (fallback ? TRANSLATIONS[fallback] : undefined);
+  if (directMatch && directMatch[language]) {
+    return directMatch[language];
   }
-  return fallback || fieldIdOrLabel;
+
+  // 2. Case-insensitive / trimmed match
+  const trimmed = fieldIdOrLabel?.trim();
+  if (trimmed) {
+    const lowerEntry = DYNAMIC_DATA_DICTIONARY[trimmed.toLowerCase()];
+    if (lowerEntry && lowerEntry[language]) {
+      return lowerEntry[language];
+    }
+  }
+
+  // 3. If a human fallback was supplied (e.g. from service definition or saved label)
+  if (fallback && fallback.trim()) {
+    const fallbackTrimmed = fallback.trim();
+    const fallbackEntry = DYNAMIC_DATA_DICTIONARY[fallbackTrimmed] || DYNAMIC_DATA_DICTIONARY[fallbackTrimmed.toLowerCase()];
+    if (fallbackEntry && fallbackEntry[language]) {
+      return fallbackEntry[language];
+    }
+    return fallbackTrimmed;
+  }
+
+  // 4. If key is a generated internal ID like field_1729381928_xyz, return a clean localized generic name
+  if (/^(field_|custom_|spec_|[0-9a-f]{8}-[0-9a-f]{4})/i.test(fieldIdOrLabel)) {
+    return language === 'ar' ? 'متطلب / تفصيل إضافي' : 'Additional Requirement';
+  }
+
+  // 5. Clean snake_case / camelCase if no translation found
+  return fieldIdOrLabel;
 }
 
 export function translateOptionValue(option: string, language: Language): string {

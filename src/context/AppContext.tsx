@@ -60,7 +60,7 @@ interface AppContextType {
   tDynamic: (text: any) => string;
   tService: (serviceId: string, originalName?: string, originalDesc?: string) => { name: string; description: string };
   tDepartment: (deptId: string, originalName?: string, originalDesc?: string) => { name: string; description: string };
-  tField: (fieldIdOrLabel: string, fallback?: string) => string;
+  tField: (fieldIdOrLabel: string, fallback?: string, serviceId?: string) => string;
   tOption: (option: string) => string;
   tUnit: (unit?: string) => string;
   dir: 'rtl' | 'ltr';
@@ -354,6 +354,123 @@ export const findSupervisorForClub = (
   return undefined;
 };
 
+// Robust helper function to match task assignments to staff across account types, custom profiles & department mappings
+export const isTaskAssignedToStaff = (
+  task?: Task | null, 
+  staff?: StaffMember | null, 
+  currentUser?: UserAccount | null
+): boolean => {
+  if (!task) return false;
+  if (!staff && !currentUser) return false;
+
+  const staffId = staff?.id || currentUser?.staffId || currentUser?.id;
+  const staffRole = staff?.roleCode || currentUser?.role;
+
+  // 1. Exact or normalized staff ID match
+  if (task.staffId && staffId) {
+    if (task.staffId === staffId) return true;
+    if (task.staffId.replace(/^user_staff_/, '') === staffId.replace(/^user_staff_/, '')) return true;
+    if (`user_staff_${task.staffId}` === staffId || `user_staff_${staffId}` === task.staffId) return true;
+  }
+
+  // 2. Role code match (e.g. staff_events_buildings)
+  if (task.staffId && staffRole) {
+    if (task.staffId === staffRole) return true;
+    if (staffRole.endsWith(task.staffId) || task.staffId.endsWith(staffRole.replace(/^staff_/, ''))) return true;
+  }
+
+  // 3. Department matching (e.g. events_buildings)
+  const depts: string[] = [
+    ...(staff?.departmentIds || []),
+    ...(currentUser?.department ? currentUser.department.split(',').map(s => s.trim()) : []),
+    ...(staff?.roleCode?.startsWith('staff_') ? [staff.roleCode.replace(/^staff_/, '')] : []),
+    ...(currentUser?.role?.startsWith('staff_') ? [currentUser.role.replace(/^staff_/, '')] : []),
+  ].filter(Boolean);
+
+  if (task.departmentId && depts.length > 0) {
+    if (depts.includes(task.departmentId) || depts.some(d => d.includes(task.departmentId) || task.departmentId.includes(d))) {
+      return true;
+    }
+  }
+
+  // 4. Staff Name matching
+  if (task.staffName && (staff?.name || staff?.shortName || currentUser?.name)) {
+    const taskNorm = normalizePersonName(task.staffName);
+    if (staff?.name && normalizePersonName(staff.name) === taskNorm) return true;
+    if (staff?.shortName && normalizePersonName(staff.shortName) === taskNorm) return true;
+    if (currentUser?.name && normalizePersonName(currentUser.name) === taskNorm) return true;
+  }
+
+  return false;
+};
+
+// Smart conflict-resistant merge function that prevents stale cloud caches or background polls from reverting approved requests
+export const mergeRequestsWithNewestWins = (
+  localList: ClubRequest[], 
+  incomingList: ClubRequest[]
+): ClubRequest[] => {
+  if (!incomingList || incomingList.length === 0) return localList || [];
+  if (!localList || localList.length === 0) return incomingList || [];
+
+  const localMap = new Map<string, ClubRequest>();
+  localList.forEach(r => localMap.set(r.id, r));
+
+  const incomingMap = new Map<string, ClubRequest>();
+  incomingList.forEach(r => incomingMap.set(r.id, r));
+
+  const allIds = Array.from(new Set([...localMap.keys(), ...incomingMap.keys()]));
+  const merged: ClubRequest[] = [];
+
+  for (const id of allIds) {
+    const local = localMap.get(id);
+    const incoming = incomingMap.get(id);
+
+    if (local && !incoming) {
+      merged.push(local);
+    } else if (!local && incoming) {
+      merged.push(incoming);
+    } else if (local && incoming) {
+      const localUpdated = new Date(local.updatedAt || local.createdAt || 0).getTime();
+      const incomingUpdated = new Date(incoming.updatedAt || incoming.createdAt || 0).getTime();
+
+      // Check if one has supervisor approval while other does not
+      const localIsApproved = local.supervisorStatus === 'approved' || local.status === 'submitted' || local.status === 'in_progress' || local.status === 'completed';
+      const incomingIsApproved = incoming.supervisorStatus === 'approved' || incoming.status === 'submitted' || incoming.status === 'in_progress' || incoming.status === 'completed';
+
+      if (localUpdated > incomingUpdated + 500) {
+        // Local is strictly newer - keep local version!
+        merged.push(local);
+      } else if (incomingUpdated > localUpdated + 500) {
+        // Incoming is newer, but protect against stale caches reverting an approved request back to pending_supervisor
+        if (localIsApproved && !incomingIsApproved) {
+          merged.push({
+            ...incoming,
+            status: incoming.status === 'pending_supervisor' ? 'submitted' : incoming.status,
+            supervisorStatus: 'approved',
+            supervisorApprovalDate: local.supervisorApprovalDate || incoming.supervisorApprovalDate || new Date().toISOString(),
+            supervisorNotes: local.supervisorNotes || incoming.supervisorNotes,
+            updatedAt: local.updatedAt || incoming.updatedAt,
+          });
+        } else {
+          merged.push(incoming);
+        }
+      } else {
+        // Timestamps are close: if either was approved, keep approval!
+        if (localIsApproved && !incomingIsApproved) {
+          merged.push(local);
+        } else if (!localIsApproved && incomingIsApproved) {
+          merged.push(incoming);
+        } else {
+          merged.push(localUpdated >= incomingUpdated ? local : incoming);
+        }
+      }
+    }
+  }
+
+  merged.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+  return merged;
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Language State (ar / en)
   const [language, setLanguageState] = useState<Language>(() => {
@@ -403,8 +520,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return translateDepartmentData(deptId, language, originalName, originalDesc);
   };
 
-  const tField = (fieldIdOrLabel: string, fallback?: string): string => {
-    return translateFieldLabel(fieldIdOrLabel, language, fallback);
+  const tField = (fieldIdOrLabel: string, fallback?: string, serviceId?: string): string => {
+    let resolvedFallback = fallback;
+    if (!resolvedFallback && fieldIdOrLabel) {
+      const allServices = servicesRef.current || [];
+      if (serviceId) {
+        const srv = allServices.find(s => s.id === serviceId);
+        const f = srv?.fields?.find(field => field.id === fieldIdOrLabel || field.label === fieldIdOrLabel);
+        if (f) resolvedFallback = f.label;
+      }
+      if (!resolvedFallback) {
+        const f = allServices.flatMap(s => s.fields || []).find(field => field.id === fieldIdOrLabel || field.label === fieldIdOrLabel);
+        if (f) resolvedFallback = f.label;
+      }
+    }
+    return translateFieldLabel(fieldIdOrLabel, language, resolvedFallback);
   };
 
   const tOption = (option: string): string => {
@@ -567,6 +697,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     return AVAILABLE_SERVICES;
   });
+  const servicesRef = useRef<ServiceItem[]>(services);
+  useEffect(() => {
+    servicesRef.current = services;
+  }, [services]);
 
   // Authentication State - Default to null or stored user
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
@@ -676,8 +810,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         // Cloud is newer or equal, safely sync
         if (Array.isArray(cloudData.requests)) {
-          setRequests(cloudData.requests);
-          localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(cloudData.requests));
+          setRequests(prev => {
+            const merged = mergeRequestsWithNewestWins(prev, cloudData.requests);
+            localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(merged));
+            return merged;
+          });
         }
 
         if (Array.isArray(cloudData.userAccounts) && cloudData.userAccounts.length > 0) {
@@ -925,8 +1062,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubscribeFirestore = subscribeToAllAppData({
       onRequestsChange: (incomingRequests) => {
         if (incomingRequests && incomingRequests.length > 0) {
-          setRequests(incomingRequests);
-          localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(incomingRequests));
+          setRequests(prev => {
+            const merged = mergeRequestsWithNewestWins(prev, incomingRequests);
+            localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(merged));
+            return merged;
+          });
           setCloudSyncStatus('synced');
           setLastSyncTime(new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
         }
@@ -2151,19 +2291,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     // 4. Staff Member ONLY sees requests that contain tasks assigned to them AND are approved by supervisor (not pending_supervisor)
-    if (currentStaff) {
-      if (req.status === 'pending_supervisor') return false;
-      return req.tasks.some(t => t.staffId === currentStaff.id);
+    if (currentStaff || (currentUser?.role && currentUser.role.startsWith('staff_'))) {
+      if (req.status === 'pending_supervisor' && req.supervisorStatus !== 'approved') return false;
+      return req.tasks.some(t => isTaskAssignedToStaff(t, currentStaff, currentUser));
     }
 
     return false;
   }).map(req => {
     // If user is a staff member, privacy protection hides other staff's private details
-    if (currentStaff && currentUser?.role !== 'admin' && currentUser?.role !== 'club_supervisor') {
+    if ((currentStaff || (currentUser?.role && currentUser.role.startsWith('staff_'))) && currentUser?.role !== 'admin' && currentUser?.role !== 'club_supervisor') {
       return {
         ...req,
         // Only include tasks belonging to this staff member
-        tasks: req.tasks.filter(t => t.staffId === currentStaff.id),
+        tasks: req.tasks.filter(t => isTaskAssignedToStaff(t, currentStaff, currentUser)),
       };
     }
     return req;
@@ -2472,6 +2612,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const deptDef = srvDef ? DEPARTMENTS[srvDef.departmentId] : undefined;
       const staff = staffMembers.find(sm => sm.id === srvDef?.staffId) || STAFF_MEMBERS.find(sm => sm.id === srvDef?.staffId);
 
+      const detailsLabels: Record<string, string> = {};
+      if (srvDef?.fields) {
+        srvDef.fields.forEach(f => {
+          if (f.label) {
+            detailsLabels[f.id] = f.label;
+          }
+        });
+      }
+
       return {
         id: `TSK-${100 * count + index + 1}`,
         requestId: reqId,
@@ -2484,6 +2633,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         status: 'pending' as TaskStatus,
         priority: srvData.priority || 'normal',
         details: srvData.details,
+        detailsLabels,
         comments: [],
         createdAt: timestamp,
         updatedAt: timestamp,
@@ -2699,11 +2849,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const deptDef = srvDef ? DEPARTMENTS[srvDef.departmentId] : undefined;
         const staff = staffMembers.find(sm => sm.id === srvDef?.staffId) || STAFF_MEMBERS.find(sm => sm.id === srvDef?.staffId);
 
+        const detailsLabels: Record<string, string> = {};
+        if (srvDef?.fields) {
+          srvDef.fields.forEach(f => {
+            if (f.label) {
+              detailsLabels[f.id] = f.label;
+            }
+          });
+        }
+
         if (existingTask) {
           return {
             ...existingTask,
             priority: srvData.priority || existingTask.priority || 'normal',
             details: srvData.details,
+            detailsLabels: { ...detailsLabels, ...(existingTask.detailsLabels || {}) },
             updatedAt: timestamp,
           };
         }
@@ -2720,6 +2880,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           status: 'pending' as TaskStatus,
           priority: srvData.priority || 'normal',
           details: srvData.details,
+          detailsLabels,
           comments: [],
           createdAt: timestamp,
           updatedAt: timestamp,

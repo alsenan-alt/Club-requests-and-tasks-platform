@@ -134,6 +134,7 @@ export interface Task {
   status: TaskStatus;
   priority: 'normal' | 'high' | 'urgent';
   details: Record<string, any>;
+  detailsLabels?: Record<string, string>;
   notes?: string;
   externalUrl?: string;
   completionDate?: string;

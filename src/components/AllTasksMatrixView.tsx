@@ -3,7 +3,7 @@ import {
   Lock,
   ArrowUpRight
 } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { useApp, isTaskAssignedToStaff } from '../context/AppContext';
 import { STAFF_MEMBERS, DEPARTMENTS } from '../data/initialData';
 import { Task } from '../types';
 
@@ -34,8 +34,8 @@ export const AllTasksMatrixView: React.FC<Props> = ({ onOpenRequestDetails }) =>
   visibleRequests.forEach(req => {
     req.tasks.forEach(task => {
       // If staff, only show their own tasks
-      if (currentStaff && currentRole !== 'admin') {
-        if (task.staffId === currentStaff.id) {
+      if ((currentStaff || (currentUser?.role && currentUser.role.startsWith('staff_'))) && currentRole !== 'admin') {
+        if (isTaskAssignedToStaff(task, currentStaff, currentUser)) {
           allTasks.push({ task, request: req });
         }
       } else {
