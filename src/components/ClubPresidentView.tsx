@@ -34,6 +34,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { DEPARTMENTS, STAFF_MEMBERS, CLUBS_LIST } from '../data/initialData';
 import { ClubRequest, Task, TaskStatus, ServiceItem } from '../types';
+import { generateSupervisorMailtoLink } from '../utils/emailService';
 import { EditServiceTitleModal } from './EditServiceTitleModal';
 import { DeleteConfirmationModal } from './DeleteConfirmationModal';
 
@@ -93,6 +94,38 @@ export const ClubPresidentView: React.FC<Props> = ({
     (acc, r) => acc + r.tasks.filter(t => t.status === 'in_progress').length, 
     0
   );
+
+  const handleOpenMailAppForRequest = (req: ClubRequest) => {
+    const sEmail = req.supervisorEmail || 'club.supervisor@kfupm.edu.sa';
+    const sName = req.supervisorName || 'المشرف الأكاديمي';
+    const mailto = generateSupervisorMailtoLink({
+      request: req,
+      supervisorName: sName,
+      supervisorEmail: sEmail,
+      presidentName: req.presidentName,
+      presidentPhone: req.presidentPhone,
+      presidentEmail: req.presidentEmail,
+      clubName: req.clubName,
+      eventTitle: req.eventTitle,
+      eventDate: req.eventDate,
+      startTime: req.startTime,
+      endTime: req.endTime,
+      locationSummary: req.locationSummary,
+      expectedAttendees: req.expectedAttendees,
+      description: req.description,
+      budget: req.budget,
+      tasks: req.tasks,
+      isUpdate: false,
+    });
+
+    try {
+      const a = document.createElement('a');
+      a.href = mailto;
+      a.click();
+    } catch {
+      window.location.href = mailto;
+    }
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -437,15 +470,17 @@ export const ClubPresidentView: React.FC<Props> = ({
                         </span>
                       </div>
 
-                      {/* Send/Preview Outlook Notification Button */}
+                      {/* Open in Mail App Button */}
                       <button
                         type="button"
-                        onClick={() => openEmailPreviewForRequest(req.id)}
-                        className="px-3 py-2 text-xs font-bold text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 shadow-xs"
-                        title="إرسال إشعار Outlook جاهز للمشرف الأكاديمي"
+                        id={`btn-open-mail-app-${req.id}`}
+                        onClick={() => handleOpenMailAppForRequest(req)}
+                        className="px-3 py-2 text-xs font-bold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-xs hover:shadow-sm group"
+                        title="فتح في تطبيق البريد المثبت على جهازك لإرسال الإشعار للمشرف الأكاديمي"
                       >
-                        <Mail className="w-3.5 h-3.5 text-blue-600" />
-                        <span className="hidden sm:inline">إشعار Outlook</span>
+                        <Mail className="w-3.5 h-3.5 text-emerald-700 group-hover:scale-110 transition-transform" />
+                        <span className="hidden sm:inline">تطبيق البريد (Mail App)</span>
+                        <span className="sm:hidden">البريد</span>
                       </button>
 
                       {/* Detail View CTA */}
