@@ -58,7 +58,8 @@ export const ClubPresidentView: React.FC<Props> = ({
     deleteRequest,
     staffMembers,
     setEditingRequest,
-    setIsEditRequestModalOpen
+    setIsEditRequestModalOpen,
+    openEmailPreviewForRequest
   } = useApp();
 
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -435,6 +436,17 @@ export const ClubPresidentView: React.FC<Props> = ({
                           {completedCount} من {req.tasks.length} مهام منجزة
                         </span>
                       </div>
+
+                      {/* Send/Preview Outlook Notification Button */}
+                      <button
+                        type="button"
+                        onClick={() => openEmailPreviewForRequest(req.id)}
+                        className="px-3 py-2 text-xs font-bold text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 shadow-xs"
+                        title="إرسال إشعار Outlook جاهز للمشرف الأكاديمي"
+                      >
+                        <Mail className="w-3.5 h-3.5 text-blue-600" />
+                        <span className="hidden sm:inline">إشعار Outlook</span>
+                      </button>
 
                       {/* Detail View CTA */}
                       <button

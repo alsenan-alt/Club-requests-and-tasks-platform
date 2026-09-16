@@ -91,6 +91,11 @@ export const EmailPreviewModal: React.FC<Props> = ({ emailLog, onClose, onResend
     window.open(outlookUrl, '_blank', 'noopener,noreferrer');
   };
 
+  const handleOpenOutlookLive = () => {
+    const outlookUrl = getOutlookComposeUrl(emailLog.recipientEmail, emailLog.subject, emailLog.bodyText);
+    window.open(outlookUrl, '_blank', 'noopener,noreferrer');
+  };
+
   const handleResend = async () => {
     setIsResending(true);
     if (onResend) {
@@ -193,22 +198,32 @@ export const EmailPreviewModal: React.FC<Props> = ({ emailLog, onClose, onResend
             <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
               <button
                 type="button"
+                onClick={handleOpenOutlook}
+                className="px-3 py-1.5 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                title="فتح في Outlook الجامعي (Office 365)"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Outlook الجامعي (Office 365)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleOpenOutlookLive}
+                className="px-3 py-1.5 text-xs font-bold text-blue-900 bg-blue-100 hover:bg-blue-200 border border-blue-300 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
+                title="فتح في Outlook Live / Webmail"
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-blue-700" />
+                <span>Outlook Live</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={handleOpenGmail}
                 className="px-3 py-1.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
                 title="فتح في Gmail مباشرة"
               >
                 <Send className="w-3.5 h-3.5" />
-                <span>إرسال عبر Gmail</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleOpenOutlook}
-                className="px-3 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
-                title="فتح في Outlook الجامعي / الويب"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span>إرسال عبر Outlook</span>
+                <span>Gmail</span>
               </button>
             </div>
           </div>

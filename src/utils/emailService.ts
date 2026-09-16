@@ -56,6 +56,10 @@ export function buildSupervisorEmailHtml(params: EmailTemplateParams): string {
     isUpdate
   } = params;
 
+  const platformUrl = typeof window !== 'undefined' && window.location?.origin 
+    ? window.location.origin 
+    : 'https://club-requests-and-tasks-platform.vercel.app/';
+
   const tasksListHtml = tasks && tasks.length > 0
     ? tasks.map((t, idx) => `
         <tr style="border-bottom: 1px solid #e2e8f0;">
@@ -220,13 +224,13 @@ export function buildSupervisorEmailHtml(params: EmailTemplateParams): string {
                 <p style="margin: 0 0 14px 0; font-size: 14px; color: #166534; font-weight: bold;">
                   يمكنكم الدخول إلى المنظومة الآن لمراجعة تفاصيل الطلب واعتماده أو إبداء الملاحظات:
                 </p>
-                <a href="https://club-requests-and-tasks-platform.vercel.app/" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #059669; color: #ffffff; padding: 12px 32px; border-radius: 10px; font-size: 14px; font-weight: bold; text-decoration: none; box-shadow: 0 4px 6px -1px rgba(5, 150, 105, 0.3); border: 1px solid #047857;">
+                <a href="${platformUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #059669; color: #ffffff; padding: 12px 32px; border-radius: 10px; font-size: 14px; font-weight: bold; text-decoration: none; box-shadow: 0 4px 6px -1px rgba(5, 150, 105, 0.3); border: 1px solid #047857;">
                   🔗 الدخول إلى المنظومة لمراجعة واعتماد الطلب
                 </a>
                 <div style="margin-top: 14px; padding-top: 12px; border-top: 1px solid #dcfce7;">
                   <span style="font-size: 12px; color: #475569; display: block; margin-bottom: 4px;">رابط المنصة المباشر:</span>
-                  <a href="https://club-requests-and-tasks-platform.vercel.app/" target="_blank" rel="noopener noreferrer" style="font-size: 13px; color: #047857; font-weight: bold; text-decoration: underline; word-break: break-all; direction: ltr; display: inline-block; font-family: monospace;">
-                    https://club-requests-and-tasks-platform.vercel.app/
+                  <a href="${platformUrl}" target="_blank" rel="noopener noreferrer" style="font-size: 13px; color: #047857; font-weight: bold; text-decoration: underline; word-break: break-all; direction: ltr; display: inline-block; font-family: monospace;">
+                    ${platformUrl}
                   </a>
                 </div>
               </div>
